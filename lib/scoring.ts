@@ -6,8 +6,8 @@ export type NLIScore = {
   neutral: number;
 };
 
-const SUPPORT_THRESHOLD = Number(process.env.SUPPORT_THRESHOLD ?? 0.55);
-const REFUTE_THRESHOLD = Number(process.env.REFUTE_THRESHOLD ?? 0.55);
+const SUPPORT_THRESHOLD = Number(process.env.SUPPORT_THRESHOLD ?? 0.5);
+const REFUTE_THRESHOLD = Number(process.env.REFUTE_THRESHOLD ?? 0.5);
 const COVERAGE_DIVISOR = Number(process.env.COVERAGE_DIVISOR ?? 6);
 const CONFIDENCE_BASE_WEIGHT = Number(process.env.CONFIDENCE_BASE_WEIGHT ?? 0.7);
 

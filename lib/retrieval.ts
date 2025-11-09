@@ -1,4 +1,6 @@
 import { EvidenceCandidateSchema, type EvidenceCandidate } from './schemas';
+import { fetchMainText, pickBestSentences } from './scrape';
+import { rankByClaimRelevance } from './ranking';
 
 const GOOGLE_CSE_ID = process.env.GOOGLE_CSE_ID;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
@@ -9,6 +11,8 @@ const DEFAULT_LIMIT = 5;
 type SearchOptions = {
   limit?: number;
   provider?: 'google' | 'brave';
+  freshness?: 'm3' | 'm6' | 'y1' | 'any';
+  sitePrefs?: string[];
 };
 
 type Fetcher = () => Promise<EvidenceCandidate[]>;
@@ -31,13 +35,14 @@ function buildCandidate(partial: Omit<EvidenceCandidate, 'id'>): EvidenceCandida
   return EvidenceCandidateSchema.parse({ ...partial, id: crypto.randomUUID() });
 }
 
-async function googleSearch(query: string, limit: number): Promise<EvidenceCandidate[]> {
+async function googleSearch(query: string, limit: number, freshness?: SearchOptions['freshness']): Promise<EvidenceCandidate[]> {
   if (!GOOGLE_CSE_ID || !GOOGLE_API_KEY) return [];
   const url = new URL('https://www.googleapis.com/customsearch/v1');
   url.searchParams.set('key', GOOGLE_API_KEY);
   url.searchParams.set('cx', GOOGLE_CSE_ID);
   url.searchParams.set('q', query);
   url.searchParams.set('num', String(limit));
+  if (freshness && freshness !== 'any') url.searchParams.set('dateRestrict', freshness);
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -92,11 +97,11 @@ export async function searchWeb(claim: string, options: SearchOptions = {}): Pro
 
   const fetchers: Fetcher[] = [];
   if (provider === 'google') {
-    fetchers.push(() => googleSearch(claim, limit));
+    fetchers.push(() => googleSearch(claim, limit, options.freshness));
     fetchers.push(() => braveSearch(claim, limit));
   } else {
     fetchers.push(() => braveSearch(claim, limit));
-    fetchers.push(() => googleSearch(claim, limit));
+    fetchers.push(() => googleSearch(claim, limit, options.freshness));
   }
 
   return withFallback(fetchers);
@@ -111,23 +116,60 @@ export async function searchWikipedia(query: string, limit = DEFAULT_LIMIT): Pro
   url.searchParams.set('utf8', '1');
   url.searchParams.set('srlimit', String(limit));
 
-  const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
-  if (!res.ok) {
-    throw new Error('Wikipedia search failed');
+  let data: any;
+  try {
+    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+    if (!res.ok) {
+      return [];
+    }
+    data = await res.json();
+  } catch {
+    return [];
   }
-  const data = await res.json();
   const pages = data.query?.search ?? [];
-  return pages.map((page: any) => {
-    const pageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/\s/g, '_'))}`;
-    return buildCandidate({
-      source: 'wikipedia',
-      url: pageUrl,
-      title: page.title,
-      quote: page.snippet?.replace(/<[^>]+>/g, '') ?? '',
-      authority: 0.8,
-      published_at: page.timestamp
-    });
-  });
+  const results: EvidenceCandidate[] = [];
+  for (const page of pages) {
+    const title = page.title as string;
+    const pageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/\s/g, '_'))}`;
+    // Fetch extract for better quotes
+    try {
+      const eu = new URL('https://en.wikipedia.org/w/api.php');
+      eu.searchParams.set('action', 'query');
+      eu.searchParams.set('prop', 'extracts');
+      eu.searchParams.set('format', 'json');
+      eu.searchParams.set('explaintext', '1');
+      eu.searchParams.set('exsentences', '3');
+      eu.searchParams.set('redirects', '1');
+      eu.searchParams.set('titles', title);
+      const er = await fetch(eu.toString(), { next: { revalidate: 3600 } });
+      const ej = await er.json();
+      const pagesObj = ej.query?.pages ?? {};
+      const firstKey = Object.keys(pagesObj)[0];
+      const extract = firstKey ? pagesObj[firstKey]?.extract : '';
+      results.push(
+        buildCandidate({
+          source: 'wikipedia',
+          url: pageUrl,
+          title,
+          quote: (extract as string) || (page.snippet?.replace(/<[^>]+>/g, '') ?? ''),
+          authority: 0.85,
+          published_at: page.timestamp
+        })
+      );
+    } catch {
+      results.push(
+        buildCandidate({
+          source: 'wikipedia',
+          url: pageUrl,
+          title,
+          quote: page.snippet?.replace(/<[^>]+>/g, '') ?? '',
+          authority: 0.8,
+          published_at: page.timestamp
+        })
+      );
+    }
+  }
+  return results;
 }
 
 export async function searchWikidata(query: string, limit = DEFAULT_LIMIT): Promise<EvidenceCandidate[]> {
@@ -139,11 +181,16 @@ export async function searchWikidata(query: string, limit = DEFAULT_LIMIT): Prom
   url.searchParams.set('search', query);
   url.searchParams.set('limit', String(limit));
 
-  const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
-  if (!res.ok) {
-    throw new Error('Wikidata search failed');
+  let data: any;
+  try {
+    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+    if (!res.ok) {
+      return [];
+    }
+    data = await res.json();
+  } catch {
+    return [];
   }
-  const data = await res.json();
   const results = data.search ?? [];
   return results.map((item: any) => {
     const url = `https://www.wikidata.org/wiki/${item.id}`;
@@ -155,4 +202,40 @@ export async function searchWikidata(query: string, limit = DEFAULT_LIMIT): Prom
       authority: 0.75
     });
   });
+}
+
+export async function enrichWebEvidence(
+  claimText: string,
+  evidences: EvidenceCandidate[],
+  maxPages = 3
+): Promise<EvidenceCandidate[]> {
+  const head = evidences.slice(0, maxPages);
+  const tail = evidences.slice(maxPages);
+  const enriched = await Promise.all(
+    head.map(async (e) => {
+      const text = await fetchMainText(e.url);
+      if (!text) return e;
+      const picks = pickBestSentences(claimText, text, 2);
+      if (!picks.length) return e;
+      return { ...e, quote: picks.join(' ') };
+    })
+  );
+  return [...enriched, ...tail];
+}
+
+export async function searchAcrossQueries(
+  queries: string[],
+  options: SearchOptions & { claimText: string }
+): Promise<EvidenceCandidate[]> {
+  const all: EvidenceCandidate[] = [];
+  for (const q of queries) {
+    // eslint-disable-next-line no-await-in-loop
+    const items = await searchWeb(q, options);
+    all.push(...items);
+  }
+  // Deduplicate by url
+  const deduped = Array.from(new Map(all.map((i) => [i.url, i])).values());
+  const ranked = rankByClaimRelevance(options.claimText, deduped, options.limit ?? DEFAULT_LIMIT);
+  const enriched = await enrichWebEvidence(options.claimText, ranked, 3);
+  return enriched;
 }

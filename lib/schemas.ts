@@ -25,12 +25,39 @@ export const SourceSpanSchema = z.object({
   sentenceIndex: z.number().int().nonnegative()
 });
 
+export const NumberQualifierEnum = z.enum([
+  'AT_LEAST',
+  'AT_MOST',
+  'APPROX',
+  'GREATER',
+  'LESS',
+  'EQUAL'
+]);
+
+export const ClaimNumberSchema = z.object({
+  key: optionalStringField(), // e.g., fatalities/injured/budget
+  value: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      const n = Number(val.replace(/[^0-9.+-]/g, ''));
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return val;
+  }, z.number()),
+  qualifier: NumberQualifierEnum.optional(),
+  unit: optionalStringField()
+});
+
 export const NormalizedClaimSchema = z.object({
   subject: stringField(),
   predicate: stringField(),
   object: stringField(),
   time: optionalStringField(),
-  unit: optionalStringField()
+  unit: optionalStringField(),
+  location: optionalStringField(),
+  event: optionalStringField(),
+  entities: z.array(stringField()).optional(),
+  numbers: z.array(ClaimNumberSchema).optional(),
+  qualifiers: z.array(stringField()).optional()
 });
 
 export const ClaimSchema = z.object({
@@ -78,7 +105,11 @@ export const ClaimsResponseSchema = z.array(ClaimSchema);
 
 export const SearchRequestSchema = z.object({
   claim: ClaimSchema,
-  sources: z.array(z.enum(['wikipedia', 'web', 'wikidata'])).optional()
+  sources: z.array(z.enum(['wikipedia', 'web', 'wikidata'])).optional(),
+  llm_expand: z.boolean().optional(),
+  site_prefs: z.array(z.string()).optional(),
+  freshness: z.enum(['m3', 'm6', 'y1', 'any']).optional(),
+  limit: z.number().int().positive().max(20).optional()
 });
 
 export const SearchResponseSchema = z.array(EvidenceCandidateSchema);

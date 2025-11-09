@@ -50,7 +50,13 @@ export default function HomeClient() {
       const searchRes = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim })
+        body: JSON.stringify({
+          claim,
+          llm_expand: true,
+          site_prefs: ['wikipedia.org', 'reuters.com', 'who.int', 'worldbank.org'],
+          freshness: 'any',
+          limit: 10
+        })
       });
       if (!searchRes.ok) throw new Error('search failed');
       const evidences: EvidenceCandidate[] = await searchRes.json();
@@ -88,7 +94,7 @@ export default function HomeClient() {
           body: JSON.stringify({
             sentences: parsed.sentences,
             mapping: parsed.mapping,
-            context: parsed.paragraphs.slice(0, 3).join('\n')
+            context: parsed.paragraphs.join('\n')
           })
         });
         if (!res.ok) throw new Error('claim request failed');

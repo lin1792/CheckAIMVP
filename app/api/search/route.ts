@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchWeb, searchWikipedia, searchWikidata } from '@/lib/retrieval';
+import { searchAcrossQueries, searchWikipedia, searchWikidata } from '@/lib/retrieval';
+import { expandQueries } from '@/lib/expand';
 import {
   SearchRequestSchema,
   SearchResponseSchema,
@@ -14,8 +15,24 @@ export async function POST(req: NextRequest) {
     const payload = SearchRequestSchema.parse(json);
     const sources = payload.sources ?? ['web', 'wikipedia'];
     const tasks: Promise<EvidenceCandidate[]>[] = [];
+
+    let queries: string[] = [payload.claim.text];
+    if (payload.llm_expand) {
+      queries = await expandQueries(payload.claim.text, {
+        sitePrefs: payload.site_prefs,
+        freshness: payload.freshness ?? 'any',
+        maxQueries: 4
+      });
+    }
+
     if (sources.includes('web')) {
-      tasks.push(searchWeb(payload.claim.text));
+      tasks.push(
+        searchAcrossQueries(queries, {
+          claimText: payload.claim.text,
+          limit: payload.limit ?? 10,
+          freshness: payload.freshness ?? 'any'
+        })
+      );
     }
     if (sources.includes('wikipedia')) {
       tasks.push(searchWikipedia(payload.claim.text));
@@ -28,7 +45,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未选择检索渠道' }, { status: 400 });
     }
 
-    const results = (await Promise.all(tasks)).flat();
+    const settled = await Promise.allSettled(tasks);
+    const results = settled
+      .filter((s): s is PromiseFulfilledResult<EvidenceCandidate[]> => s.status === 'fulfilled')
+      .flatMap((s) => s.value);
+    if (!results.length) {
+      // Return empty list instead of 500 to avoid breaking UI under restricted network
+      return NextResponse.json([]);
+    }
     const deduped = Array.from(new Map(results.map((item) => [item.url, item])).values()).slice(0, 12);
     const safe = SearchResponseSchema.parse(deduped);
     return NextResponse.json(safe);
