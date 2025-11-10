@@ -7,6 +7,8 @@ import ClaimsList from './ClaimsList';
 import EvidenceDrawer from './EvidenceDrawer';
 import Filters from './Filters';
 import SummaryBar from './SummaryBar';
+import LanguageSwitcher from './LanguageSwitcher';
+import { useTranslation } from './LanguageProvider';
 import type {
   Claim,
   EvidenceCandidate,
@@ -33,6 +35,7 @@ export default function HomeClient() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const { t } = useTranslation();
 
   const stats = useMemo(() => {
     const result = { ...emptyStats };
@@ -44,6 +47,13 @@ export default function HomeClient() {
 
   const verifiedCount = useMemo(() => Object.keys(verificationMap).length, [verificationMap]);
 
+  const documentContext = useMemo(() => {
+    if (!parsedDoc) return '';
+    return parsedDoc.paragraphs.join('\n');
+  }, [parsedDoc]);
+
+  const contextPayload = documentContext ? documentContext : undefined;
+
   const processClaim = useCallback(async (claim: Claim) => {
     try {
       setEvidenceMap((prev) => ({ ...prev, [claim.id]: prev[claim.id] ?? [] }));
@@ -52,10 +62,8 @@ export default function HomeClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           claim,
-          llm_expand: true,
-          site_prefs: ['wikipedia.org', 'reuters.com', 'who.int', 'worldbank.org'],
-          freshness: 'any',
-          limit: 10
+          limit: 10,
+          context: contextPayload
         })
       });
       if (!searchRes.ok) throw new Error('search failed');
@@ -65,7 +73,11 @@ export default function HomeClient() {
       const verifyRes = await fetch('/api/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim, evidences })
+        body: JSON.stringify({
+          claim,
+          evidences,
+          context: contextPayload
+        })
       });
       if (!verifyRes.ok) throw new Error('verify failed');
       const data: Verification[] = await verifyRes.json();
@@ -75,9 +87,9 @@ export default function HomeClient() {
       }
     } catch (err) {
       console.error(err);
-      setError('部分陈述验证失败，请稍后重试');
+      setError(t('errors.verifyFailed'));
     }
-  }, []);
+  }, [contextPayload, t]);
 
   const fetchClaims = useCallback(
     async (parsed: ParsedDocument) => {
@@ -107,12 +119,12 @@ export default function HomeClient() {
         }
       } catch (err) {
         console.error(err);
-        setError('陈述识别失败');
+        setError(t('errors.claimsFailed'));
       } finally {
         setClaimsLoading(false);
       }
     },
-    [processClaim]
+    [processClaim, t]
   );
 
   const handleUpload = useCallback(
@@ -140,19 +152,19 @@ export default function HomeClient() {
         }
 
         if (!response.ok) {
-          throw new Error('无法解析文档');
+          throw new Error(t('errors.parseFailed'));
         }
         const parsed: ParsedDocument = await response.json();
         setParsedDoc(parsed);
         await fetchClaims(parsed);
       } catch (err) {
         console.error(err);
-        setError('上传或解析失败');
+        setError(t('errors.uploadFailed'));
       } finally {
         setUploading(false);
       }
     },
-    [fetchClaims]
+    [fetchClaims, t]
   );
 
   const toggleFilter = (label: Verification['label']) => {
@@ -196,20 +208,21 @@ export default function HomeClient() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      setError('导出失败');
+      setError(t('errors.exportFailed'));
     } finally {
       setExporting(false);
     }
-  }, [claims, verificationMap]);
+  }, [claims, verificationMap, t]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <header className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-accent">CheckAI MVP</p>
-        <h1 className="text-3xl font-bold text-slate-900">事实核查工作台</h1>
-        <p className="text-sm text-slate-500">
-          支持 .docx 上传、可核查陈述识别、外部检索与 NLI 判定，生成完整 Markdown 报告。
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold uppercase tracking-wide text-accent">{t('app.badge')}</p>
+          <LanguageSwitcher />
+        </div>
+        <h1 className="text-3xl font-bold text-slate-900">{t('home.title')}</h1>
+        <p className="text-sm text-slate-500">{t('home.subtitle')}</p>
       </header>
 
       <UploadArea loading={uploading} onSubmit={handleUpload} />

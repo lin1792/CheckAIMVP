@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import clsx from 'clsx';
+import { useTranslation } from './LanguageProvider';
 
 export type UploadPayload = {
   file?: File;
@@ -17,11 +18,12 @@ export default function UploadArea({ loading, onSubmit }: Props) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!file && text.trim().length === 0) {
-      setError('请上传 .docx 或输入文本');
+      setError(t('upload.validation'));
       return;
     }
     setError(null);
@@ -49,13 +51,13 @@ export default function UploadArea({ loading, onSubmit }: Props) {
               setFile(nextFile ?? undefined);
             }}
           />
-          <p className="text-sm text-slate-500">支持上传 .docx 文档</p>
+          <p className="text-sm text-slate-500">{t('upload.hint')}</p>
           {file ? <p className="mt-2 font-medium text-slate-800">{file.name}</p> : null}
         </label>
         <div className="flex-1">
           <textarea
             className="h-32 w-full resize-none rounded-xl border border-slate-200 p-3 text-sm focus:border-accent focus:outline-none"
-            placeholder="或直接粘贴原文..."
+            placeholder={t('upload.placeholder')}
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
@@ -68,8 +70,8 @@ export default function UploadArea({ loading, onSubmit }: Props) {
           disabled={loading}
           className="rounded-full bg-accent px-5 py-2 text-white shadow disabled:opacity-60"
         >
-          {loading ? '解析中...' : '开始核查'}
-        </button>
+        {loading ? t('upload.button.loading') : t('upload.button.start')}
+      </button>
       </div>
     </form>
   );

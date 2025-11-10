@@ -7,6 +7,41 @@ const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
 
 const DEFAULT_LIMIT = 5;
+const MAX_AUTHORITY = 0.95;
+const MIN_AUTHORITY = 0.2;
+
+const HOST_AUTHORITY: Record<string, number> = {
+  'www.reuters.com': 0.9,
+  'reuters.com': 0.9,
+  'www.apnews.com': 0.85,
+  'apnews.com': 0.85,
+  'www.who.int': 0.92,
+  'who.int': 0.92,
+  'www.worldbank.org': 0.9,
+  'worldbank.org': 0.9,
+  'data.worldbank.org': 0.9,
+  'www.un.org': 0.88,
+  'un.org': 0.88,
+  'news.un.org': 0.88,
+  'www.nytimes.com': 0.8,
+  'nytimes.com': 0.8,
+  'www.bbc.com': 0.82,
+  'bbc.com': 0.82,
+  'www.ft.com': 0.82,
+  'ft.com': 0.82,
+  'www.nature.com': 0.86,
+  'nature.com': 0.86,
+  'www.science.org': 0.86,
+  'science.org': 0.86,
+  'www.statista.com': 0.78,
+  'statista.com': 0.78,
+  'www.imf.org': 0.88,
+  'imf.org': 0.88,
+  'www.wsj.com': 0.78,
+  'wsj.com': 0.78,
+  'www.cdc.gov': 0.92,
+  'cdc.gov': 0.92
+};
 
 type SearchOptions = {
   limit?: number;
@@ -32,7 +67,11 @@ async function withFallback(fetchers: Fetcher[]): Promise<EvidenceCandidate[]> {
 }
 
 function buildCandidate(partial: Omit<EvidenceCandidate, 'id'>): EvidenceCandidate {
-  return EvidenceCandidateSchema.parse({ ...partial, id: crypto.randomUUID() });
+  return EvidenceCandidateSchema.parse({
+    ...partial,
+    id: crypto.randomUUID(),
+    authority: clampAuthority(partial.authority)
+  });
 }
 
 async function googleSearch(query: string, limit: number, freshness?: SearchOptions['freshness']): Promise<EvidenceCandidate[]> {
@@ -57,7 +96,7 @@ async function googleSearch(query: string, limit: number, freshness?: SearchOpti
       title: item.title ?? 'Untitled',
       quote: item.snippet ?? '',
       published_at: item.pagemap?.metatags?.[0]?.['article:published_time'],
-      authority: 0.5
+      authority: computeAuthority(item.link, 0.52)
     })
   );
 }
@@ -86,7 +125,7 @@ async function braveSearch(query: string, limit: number): Promise<EvidenceCandid
       title: item.title ?? 'Untitled',
       quote: item.description ?? '',
       published_at: typeof item.age === 'string' ? item.age : undefined,
-      authority: 0.45
+      authority: computeAuthority(item.url, 0.45)
     })
   );
 }
@@ -152,7 +191,7 @@ export async function searchWikipedia(query: string, limit = DEFAULT_LIMIT): Pro
           url: pageUrl,
           title,
           quote: (extract as string) || (page.snippet?.replace(/<[^>]+>/g, '') ?? ''),
-          authority: 0.85,
+          authority: 0.9,
           published_at: page.timestamp
         })
       );
@@ -163,7 +202,7 @@ export async function searchWikipedia(query: string, limit = DEFAULT_LIMIT): Pro
           url: pageUrl,
           title,
           quote: page.snippet?.replace(/<[^>]+>/g, '') ?? '',
-          authority: 0.8,
+          authority: 0.85,
           published_at: page.timestamp
         })
       );
@@ -199,7 +238,7 @@ export async function searchWikidata(query: string, limit = DEFAULT_LIMIT): Prom
       url,
       title: item.label ?? item.id,
       quote: item.description ?? '',
-      authority: 0.75
+      authority: 0.82
     });
   });
 }
@@ -238,4 +277,31 @@ export async function searchAcrossQueries(
   const ranked = rankByClaimRelevance(options.claimText, deduped, options.limit ?? DEFAULT_LIMIT);
   const enriched = await enrichWebEvidence(options.claimText, ranked, 3);
   return enriched;
+}
+
+function computeAuthority(url: string, fallback: number): number {
+  let hostname: string | null = null;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return clampAuthority(fallback);
+  }
+  const direct = HOST_AUTHORITY[hostname];
+  let score = direct ? Math.max(fallback, direct) : fallback;
+  if (hostname.endsWith('.gov') || hostname.includes('.gov.')) {
+    score = Math.max(score, 0.88);
+  } else if (hostname.endsWith('.edu') || hostname.includes('.edu.')) {
+    score = Math.max(score, 0.82);
+  } else if (hostname.endsWith('.org')) {
+    score = Math.max(score, fallback + 0.08);
+  }
+  if (hostname.endsWith('.int')) {
+    score = Math.max(score, 0.9);
+  }
+  return clampAuthority(score);
+}
+
+function clampAuthority(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.max(MIN_AUTHORITY, Math.min(MAX_AUTHORITY, Number(value.toFixed(2))));
 }

@@ -6,6 +6,7 @@ import {
   ClaimsResponseSchema,
   type Claim
 } from '@/lib/schemas';
+import { buildHeuristicClaim, evaluateSentence } from '@/lib/claimHeuristics';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,23 @@ type DeepseekClaimsResponse = {
   claims: Claim[];
   uncertain_reason?: string | null;
 };
+
+type CandidateSentence = {
+  text: string;
+  source_span: Claim['source_span'];
+  score: number;
+  signals: string[];
+};
+
+const URL_PATTERN = /(https?:\/\/|www\.)/i;
+
+function isValidClaimText(text: string): boolean {
+  const clean = text?.trim() ?? '';
+  if (!clean) return false;
+  if (URL_PATTERN.test(clean)) return false;
+  const alphaCount = clean.match(/[A-Za-z\u4e00-\u9fa5]/g)?.length ?? 0;
+  return alphaCount >= 3;
+}
 
 function coerceString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -118,6 +136,63 @@ function sanitizeClaims(rawClaims: unknown[], fallback: Claim[]): Claim[] {
   });
 }
 
+function ensureUniqueClaimIds(claims: Claim[]): Claim[] {
+  const used = new Set<string>();
+  return claims.map((claim) => {
+    let id = coerceString(claim.id) ?? crypto.randomUUID();
+    while (used.has(id)) {
+      id = crypto.randomUUID();
+    }
+    used.add(id);
+    return { ...claim, id };
+  });
+}
+
+async function runDeepseekForCandidates(params: {
+  mode: 'allow' | 'review';
+  candidates: CandidateSentence[];
+  context?: string;
+  fallback: Claim[];
+}): Promise<Claim[]> {
+  const { mode, candidates, context, fallback } = params;
+  if (!candidates.length) return [];
+  const systemPrompt =
+    mode === 'allow'
+      ? '你是事实核查专家。以下句子由启发式规则标为“高概率事实”。请严谨核实：仅当句子包含可外部验证的客观陈述（有明确主体、谓词、宾语或量化信息）时才输出 Claim。任何比喻、修辞、观点、宣传口号或缺乏明确事实的句子必须跳过。'
+      : '你是事实核查专家。以下句子存在歧义，需要你判断是否包含可外部验证的事实主张。只有在句子明确陈述可核查事实时才输出 Claim；否则跳过。';
+
+  const prompt = [
+    {
+      role: 'system' as const,
+      content: `${systemPrompt} 输出严格 JSON {"claims":[Claim,...],"uncertain_reason":string|null}。Claim 必须包含 id,text,normalized,checkworthy,confidence,source_span。normalized 要给出 subject/predicate/object，缺失字段请省略。候选中每条含 signals 数组：若 signals 含 "url"、"non_sentence" 或句子显然不是完整陈述，必须跳过。不得生成未在候选中的句子。`
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify({
+        context: context ?? null,
+        candidates: candidates.map((item, idx) => ({
+          id: idx + 1,
+          text: item.text,
+          source_span: item.source_span,
+          score: item.score,
+          signals: item.signals
+        }))
+      })
+    }
+  ];
+
+  const response = await callDeepseekJSON<DeepseekClaimsResponse>(prompt, { claims: fallback }, {
+    maxRetries: 2
+  });
+  const sanitized = sanitizeClaims(response.claims ?? [], fallback);
+  const filtered = sanitized.filter((claim) => isValidClaimText(claim.text));
+  if (filtered.length) {
+    return ClaimsResponseSchema.parse(filtered);
+  }
+  const fallbackFiltered = fallback.filter((claim) => isValidClaimText(claim.text));
+  return fallbackFiltered;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
@@ -126,27 +201,66 @@ export async function POST(req: NextRequest) {
       text,
       source_span: payload.mapping[idx] ?? { paragraphIndex: 0, sentenceIndex: idx }
     }));
-
-    const fallback = { claims: fallbackClaims(payload.sentences, payload.mapping) };
-
-    const prompt = [
-      {
-        role: 'system' as const,
-        content: `你是事实核查专家。给你原文全文 context 和按顺序的句子列表。任务：找出所有可核查陈述（含组织属性、成立时间、地位、数量与比较级），并结构化输出。严格只输出 JSON 对象：{"claims":[Claim,...],"uncertain_reason":string|null}。Claim 字段必须包含 id,text,normalized,checkworthy,confidence,source_span；置信度 0-1。normalized 必须包含 subject/predicate/object；可选字段：time,unit,location,event,entities(string[]),numbers([{key?,value:number,qualifier?("AT_LEAST"|"AT_MOST"|"APPROX"|"GREATER"|"LESS"|"EQUAL"),unit?}]),qualifiers(string[])。字段缺失请用 null 或省略，不要输出除 JSON 外的任何文本。`
-      },
-      {
-        role: 'user' as const,
-        content: JSON.stringify({ sentences: pairs, context: payload.context ?? null })
+    const context = payload.context ?? null;
+    const evaluations = pairs.map((pair) => evaluateSentence(pair.text));
+    const allowCandidates: CandidateSentence[] = [];
+    const reviewCandidates: CandidateSentence[] = [];
+    pairs.forEach((pair, idx) => {
+      const evalResult = evaluations[idx];
+      if (evalResult.decision === 'ALLOW') {
+        allowCandidates.push({
+          text: pair.text,
+          source_span: pair.source_span,
+          score: evalResult.score,
+          signals: evalResult.signals
+        });
+      } else if (evalResult.decision === 'REVIEW') {
+        reviewCandidates.push({
+          text: pair.text,
+          source_span: pair.source_span,
+          score: evalResult.score,
+          signals: evalResult.signals
+        });
       }
-    ];
+    });
 
-    const response = await callDeepseekJSON<DeepseekClaimsResponse>(prompt, fallback, { maxRetries: 2 });
-    const sanitized = sanitizeClaims(response.claims ?? [], fallback.claims);
-    const claims = sanitized.length ? ClaimsResponseSchema.parse(sanitized) : fallback.claims;
+    const allowFallback = allowCandidates.map((candidate) =>
+      buildHeuristicClaim(candidate.text, candidate.source_span, candidate.score)
+    );
+    const reviewFallback = reviewCandidates.map((candidate) =>
+      buildHeuristicClaim(candidate.text, candidate.source_span, 2)
+    );
 
-    if (claims.length < 5 && fallback.claims.length >= 5) {
-      claims.push(...fallback.claims.slice(claims.length, 5));
-    }
+    const allowClaims = await runDeepseekForCandidates({
+      mode: 'allow',
+      candidates: allowCandidates,
+      context,
+      fallback: allowFallback
+    });
+    const reviewClaims = await runDeepseekForCandidates({
+      mode: 'review',
+      candidates: reviewCandidates,
+      context,
+      fallback: reviewFallback
+    });
+
+    const combinedFiltered = [...allowClaims, ...reviewClaims].filter((claim) =>
+      isValidClaimText(claim.text)
+    );
+    const combined = ensureUniqueClaimIds(combinedFiltered);
+    const keyed = new Map<string, Claim>();
+    combined.forEach((claim) => {
+      const key = `${claim.source_span.paragraphIndex}-${claim.source_span.sentenceIndex}`;
+      if (!keyed.has(key)) {
+        keyed.set(key, claim);
+      }
+    });
+    const claims = Array.from(keyed.values()).sort((a, b) => {
+      if (a.source_span.paragraphIndex === b.source_span.paragraphIndex) {
+        return a.source_span.sentenceIndex - b.source_span.sentenceIndex;
+      }
+      return a.source_span.paragraphIndex - b.source_span.paragraphIndex;
+    });
 
     return NextResponse.json(claims);
   } catch (error) {

@@ -2,6 +2,8 @@
 
 import clsx from 'clsx';
 import type { Claim, EvidenceCandidate, Verification } from '@/lib/schemas';
+import { useTranslation } from './LanguageProvider';
+import type { TranslationKey } from '@/lib/i18n';
 
 type Props = {
   claims: Claim[];
@@ -13,13 +15,6 @@ type Props = {
   selectedClaimId: string | null;
 };
 
-const labelText: Record<Verification['label'], string> = {
-  SUPPORTED: '支持',
-  REFUTED: '驳斥',
-  DISPUTED: '存争议',
-  INSUFFICIENT: '证据不足'
-};
-
 export default function ClaimsList({
   claims,
   verifications,
@@ -29,6 +24,7 @@ export default function ClaimsList({
   onSelectClaim,
   selectedClaimId
 }: Props) {
+  const { t } = useTranslation();
   const filtered = claims.filter((claim) => {
     const verdict = verifications[claim.id];
     if (!filters.length || !verdict) {
@@ -48,14 +44,19 @@ export default function ClaimsList({
   }
 
   if (!filtered.length) {
-    return <p className="text-sm text-slate-500">暂无可核查陈述</p>;
+    return <p className="text-sm text-slate-500">{t('claims.empty')}</p>;
   }
 
   return (
     <div className="space-y-3">
       {filtered.map((claim) => {
         const verdict = verifications[claim.id];
-        const badge = verdict ? labelText[verdict.label] : '待验证';
+        const badge = verdict ? t(`labels.${verdict.label}` as TranslationKey) : t('claims.badge.pending');
+        const evidenceCount = evidences[claim.id]?.length ?? 0;
+        const evidenceLabel = t('claims.evidenceCount', { count: evidenceCount });
+        const confidenceLabel = verdict
+          ? t('claims.confidenceValue', { value: `${(verdict.confidence * 100).toFixed(0)}%` })
+          : t('claims.confidencePending');
         const badgeClass = verdict
           ? {
               SUPPORTED: 'bg-green-50 text-green-700',
@@ -80,8 +81,7 @@ export default function ClaimsList({
             </div>
             <p className="mt-2 text-slate-800">{claim.text}</p>
             <p className="mt-2 text-xs text-slate-500">
-              证据 {evidences[claim.id]?.length ?? 0} 条 · 置信度
-              {verdict ? ` ${(verdict.confidence * 100).toFixed(0)}%` : ' 采集中'}
+              {evidenceLabel} · {confidenceLabel}
             </p>
           </button>
         );

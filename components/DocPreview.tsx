@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import type { Claim, ParsedDocument, Verification } from '@/lib/schemas';
+import { useTranslation } from './LanguageProvider';
 
 type Props = {
   document: ParsedDocument | null;
@@ -15,7 +16,7 @@ type SentencePart = {
   paragraphIndex: number;
   sentenceIndex: number;
   text: string;
-  claim?: Claim;
+  claims: Claim[];
 };
 
 const labelClasses: Record<Verification['label'], string> = {
@@ -34,18 +35,21 @@ export default function DocPreview({
   selectedClaimId,
   onSelectClaim
 }: Props) {
+  const { t } = useTranslation();
   if (!document) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
-        上传文档后，这里会高亮可核查陈述
+        {t('docPreview.empty')}
       </div>
     );
   }
 
-  const locationMap = new Map<string, Claim>();
+  const locationMap = new Map<string, Claim[]>();
   claims.forEach((claim) => {
     const key = `${claim.source_span.paragraphIndex}-${claim.source_span.sentenceIndex}`;
-    locationMap.set(key, claim);
+    const list = locationMap.get(key) ?? [];
+    list.push(claim);
+    locationMap.set(key, list);
   });
 
   const buckets: SentencePart[][] = document.paragraphs.map(() => []);
@@ -55,7 +59,7 @@ export default function DocPreview({
       paragraphIndex: span.paragraphIndex,
       sentenceIndex: span.sentenceIndex,
       text: document.sentences[idx] ?? '',
-      claim: locationMap.get(`${span.paragraphIndex}-${span.sentenceIndex}`)
+      claims: locationMap.get(`${span.paragraphIndex}-${span.sentenceIndex}`) ?? []
     });
   });
   buckets.forEach((bucket) => bucket.sort((a, b) => a.sentenceIndex - b.sentenceIndex));
@@ -65,35 +69,41 @@ export default function DocPreview({
       {document.paragraphs.map((paragraph, idx) => (
         <div key={`paragraph-${idx}`} className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            段落 {idx + 1}
+            {t('docPreview.paragraph', { index: idx + 1 })}
           </p>
           <p className="mt-2 leading-relaxed text-slate-800">
             {(buckets[idx] ?? []).length === 0
               ? paragraph
               : buckets[idx].map((part, partIndex) => {
-                  if (!part.claim) {
+                  if (!part.claims.length) {
                     return (
                       <span key={`paragraph-${idx}-part-${partIndex}`}>{part.text} </span>
                     );
                   }
-                  const verdict = verifications[part.claim.id];
-                  const colorClass = verdict
-                    ? labelClasses[verdict.label]
-                    : fallbackClass;
-                  const isSelected = selectedClaimId === part.claim.id;
                   return (
-                    <button
-                      key={`${part.claim.id}-${partIndex}`}
-                      type="button"
-                      onClick={() => onSelectClaim(part.claim!.id)}
-                      className={clsx(
-                        'mr-1 inline-flex rounded px-1.5 py-0.5 text-sm transition',
-                        colorClass,
-                        isSelected && 'ring-2 ring-offset-1 ring-accent'
-                      )}
-                    >
-                      {part.text}
-                    </button>
+                    <span key={`paragraph-${idx}-part-${partIndex}`} className="mr-1 inline-flex flex-wrap gap-1">
+                      {part.claims.map((claim) => {
+                        const verdict = verifications[claim.id];
+                        const colorClass = verdict
+                          ? labelClasses[verdict.label]
+                          : fallbackClass;
+                        const isSelected = selectedClaimId === claim.id;
+                        return (
+                          <button
+                            key={claim.id}
+                            type="button"
+                            onClick={() => onSelectClaim(claim.id)}
+                            className={clsx(
+                              'rounded px-1.5 py-0.5 text-sm transition',
+                              colorClass,
+                              isSelected && 'ring-2 ring-offset-1 ring-accent'
+                            )}
+                          >
+                            {claim.text}
+                          </button>
+                        );
+                      })}
+                    </span>
                   );
                 })}
           </p>

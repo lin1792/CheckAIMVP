@@ -2,6 +2,8 @@
 
 import clsx from 'clsx';
 import type { Verification } from '@/lib/schemas';
+import { useTranslation } from './LanguageProvider';
+import type { TranslationKey } from '@/lib/i18n';
 
 type Props = {
   selected: Verification['label'][];
@@ -11,14 +13,8 @@ type Props = {
 };
 
 const order: Verification['label'][] = ['SUPPORTED', 'REFUTED', 'DISPUTED', 'INSUFFICIENT'];
-const labelMap: Record<Verification['label'], string> = {
-  SUPPORTED: '支持',
-  REFUTED: '驳斥',
-  DISPUTED: '存争议',
-  INSUFFICIENT: '证据不足'
-};
-
 export default function Filters({ selected, onToggle, onClear, stats }: Props) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
@@ -31,7 +27,7 @@ export default function Filters({ selected, onToggle, onClear, stats }: Props) {
             : 'border-slate-200 text-slate-500 hover:border-accent'
         )}
       >
-        全部
+        {t('filters.all')}
       </button>
       {order.map((label) => (
         <button
@@ -45,7 +41,7 @@ export default function Filters({ selected, onToggle, onClear, stats }: Props) {
               : 'border-slate-200 text-slate-500 hover:border-accent'
           )}
         >
-          {labelMap[label]} · {stats[label] ?? 0}
+          {t(`labels.${label}` as TranslationKey)} · {stats[label] ?? 0}
         </button>
       ))}
     </div>

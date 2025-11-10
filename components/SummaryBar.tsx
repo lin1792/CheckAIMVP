@@ -1,6 +1,8 @@
 'use client';
 
 import type { Verification } from '@/lib/schemas';
+import { useTranslation } from './LanguageProvider';
+import type { TranslationKey } from '@/lib/i18n';
 
 type Props = {
   claimsCount: number;
@@ -12,15 +14,21 @@ type Props = {
 
 export default function SummaryBar({ claimsCount, verifiedCount, stats, onExport, exporting }: Props) {
   const readyToExport = claimsCount > 0 && verifiedCount > 0;
+  const { t } = useTranslation();
+  const summaryItems: Array<{ key: TranslationKey; value: number }> = [
+    { key: 'summary.claims', value: claimsCount },
+    { key: 'summary.verified', value: verifiedCount },
+    { key: 'summary.supported', value: stats.SUPPORTED ?? 0 },
+    { key: 'summary.refuted', value: stats.REFUTED ?? 0 },
+    { key: 'summary.disputed', value: stats.DISPUTED ?? 0 },
+    { key: 'summary.insufficient', value: stats.INSUFFICIENT ?? 0 }
+  ];
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap gap-4 text-sm text-slate-600">
-        <span>陈述：{claimsCount}</span>
-        <span>已判定：{verifiedCount}</span>
-        <span>支持：{stats.SUPPORTED ?? 0}</span>
-        <span>驳斥：{stats.REFUTED ?? 0}</span>
-        <span>争议：{stats.DISPUTED ?? 0}</span>
-        <span>不足：{stats.INSUFFICIENT ?? 0}</span>
+        {summaryItems.map((item) => (
+          <span key={item.key}>{t(item.key, { count: item.value })}</span>
+        ))}
       </div>
       <button
         type="button"
@@ -28,7 +36,7 @@ export default function SummaryBar({ claimsCount, verifiedCount, stats, onExport
         onClick={onExport}
         className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {exporting ? '生成中...' : '导出 Markdown 报告'}
+        {exporting ? t('summary.exporting') : t('summary.export')}
       </button>
     </div>
   );

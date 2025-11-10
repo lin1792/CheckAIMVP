@@ -109,14 +109,16 @@ export const SearchRequestSchema = z.object({
   llm_expand: z.boolean().optional(),
   site_prefs: z.array(z.string()).optional(),
   freshness: z.enum(['m3', 'm6', 'y1', 'any']).optional(),
-  limit: z.number().int().positive().max(20).optional()
+  limit: z.number().int().positive().max(20).optional(),
+  context: z.string().optional()
 });
 
 export const SearchResponseSchema = z.array(EvidenceCandidateSchema);
 
 export const VerifyRequestSchema = z.object({
   claim: ClaimSchema,
-  evidences: z.array(EvidenceCandidateSchema)
+  evidences: z.array(EvidenceCandidateSchema),
+  context: z.string().optional()
 });
 
 export const VerifyResponseSchema = z.array(VerificationSchema);
