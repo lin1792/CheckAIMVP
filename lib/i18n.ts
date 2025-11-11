@@ -9,11 +9,13 @@ const zh = {
   'upload.validation': '请上传 .docx 或输入文本',
   'upload.button.start': '开始核查',
   'upload.button.loading': '解析中...',
+  'upload.button.stop': '停止解析',
   'errors.verifyFailed': '部分陈述验证失败，请稍后重试',
   'errors.claimsFailed': '陈述识别失败',
   'errors.parseFailed': '无法解析文档',
   'errors.uploadFailed': '上传或解析失败',
   'errors.exportFailed': '导出失败',
+  'errors.stopped': '解析已停止',
   'summary.claims': '陈述：{{count}}',
   'summary.verified': '已判定：{{count}}',
   'summary.supported': '支持：{{count}}',
@@ -49,7 +51,10 @@ const zh = {
   'language.en': 'English'
 } as const;
 
-const en: typeof zh = {
+export type TranslationKey = keyof typeof zh;
+type TranslationRecord = Record<TranslationKey, string>;
+
+const en: TranslationRecord = {
   'app.badge': 'CheckAI MVP',
   'home.title': 'Fact-Checking Workbench',
   'home.subtitle': 'Upload .docx files, extract checkable claims, search evidence and run NLI to export Markdown reports.',
@@ -58,11 +63,13 @@ const en: typeof zh = {
   'upload.validation': 'Please upload a .docx file or enter text',
   'upload.button.start': 'Start checking',
   'upload.button.loading': 'Processing...',
+  'upload.button.stop': 'Stop',
   'errors.verifyFailed': 'Some claims failed to verify. Please try again later.',
   'errors.claimsFailed': 'Claim extraction failed',
   'errors.parseFailed': 'Unable to parse the document',
   'errors.uploadFailed': 'Upload or parsing failed',
   'errors.exportFailed': 'Export failed',
+  'errors.stopped': 'Processing was stopped',
   'summary.claims': 'Claims: {{count}}',
   'summary.verified': 'Verified: {{count}}',
   'summary.supported': 'Supported: {{count}}',
@@ -97,8 +104,6 @@ const en: typeof zh = {
   'language.zh': '中文',
   'language.en': 'English'
 };
-
-export type TranslationKey = keyof typeof zh;
 
 const TRANSLATIONS: Record<Locale, Record<TranslationKey, string>> = {
   zh,

@@ -5,18 +5,28 @@ export type ChatMessage = {
   content: string;
 };
 
-const baseURL = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
+const baseURL = process.env.QWEN_BASE_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
-export const deepseekClient = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
+export const qwenClient = new OpenAI({
+  apiKey: process.env.QWEN_API_KEY,
   baseURL
 });
 
-export async function callDeepseekJSON<T>(messages: ChatMessage[], fallback: T, opts?: { model?: string; maxRetries?: number }): Promise<T> {
-  const model = opts?.model ?? 'deepseek-chat';
+type CallOptions = {
+  model?: string;
+  maxRetries?: number;
+  extraBody?: Record<string, unknown>;
+};
+
+export async function callQwenJSON<T>(
+  messages: ChatMessage[],
+  fallback: T,
+  opts?: CallOptions
+): Promise<T> {
+  const model = opts?.model ?? 'qwen-plus';
   const maxRetries = opts?.maxRetries ?? 1;
 
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (!process.env.QWEN_API_KEY) {
     return fallback;
   }
 
@@ -26,11 +36,16 @@ export async function callDeepseekJSON<T>(messages: ChatMessage[], fallback: T, 
 
   while (attempt <= maxRetries) {
     try {
-      const completion = await deepseekClient.chat.completions.create({
+      const request: OpenAI.ChatCompletionCreateParamsNonStreaming = {
         model,
         messages: payload,
-        response_format: { type: 'json_object' }
-      });
+        response_format: { type: 'json_object' },
+        stream: false
+      };
+      if (opts?.extraBody) {
+        (request as any).extra_body = opts.extraBody;
+      }
+      const completion = await qwenClient.chat.completions.create(request);
 
       const content = completion.choices[0]?.message?.content ?? '';
       const parsed = JSON.parse(content) as T;
@@ -39,7 +54,7 @@ export async function callDeepseekJSON<T>(messages: ChatMessage[], fallback: T, 
       lastError = error;
       attempt += 1;
       if (attempt > maxRetries) {
-        console.warn('Deepseek JSON parsing failed, using fallback', error);
+        console.warn('Qwen JSON parsing failed, using fallback', error);
         return fallback;
       }
       const reminder: ChatMessage = {
@@ -52,6 +67,6 @@ export async function callDeepseekJSON<T>(messages: ChatMessage[], fallback: T, 
     }
   }
 
-  console.warn('Deepseek fallback triggered', lastError);
+  console.warn('Qwen fallback triggered', lastError);
   return fallback;
 }

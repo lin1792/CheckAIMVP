@@ -12,9 +12,10 @@ export type UploadPayload = {
 type Props = {
   loading: boolean;
   onSubmit: (payload: UploadPayload) => Promise<void>;
+  onStop?: () => void;
 };
 
-export default function UploadArea({ loading, onSubmit }: Props) {
+export default function UploadArea({ loading, onSubmit, onStop }: Props) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | undefined>();
   const [error, setError] = useState<string | null>(null);
@@ -64,14 +65,23 @@ export default function UploadArea({ loading, onSubmit }: Props) {
         </div>
       </div>
       {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end gap-2">
+        {loading && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-700 transition hover:border-slate-300"
+          >
+            {t('upload.button.stop')}
+          </button>
+        ) : null}
         <button
           type="submit"
           disabled={loading}
           className="rounded-full bg-accent px-5 py-2 text-white shadow disabled:opacity-60"
         >
-        {loading ? t('upload.button.loading') : t('upload.button.start')}
-      </button>
+          {loading ? t('upload.button.loading') : t('upload.button.start')}
+        </button>
       </div>
     </form>
   );

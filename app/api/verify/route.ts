@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { VerifyRequestSchema, VerifyResponseSchema } from '@/lib/schemas';
-import { deepseekVerify } from '@/lib/deepverify';
+import { qwenVerify } from '@/lib/qwenVerify';
 import { entailmentScore } from '@/lib/nli';
 import { scoreVerification } from '@/lib/scoring';
 
@@ -14,13 +14,13 @@ export async function POST(req: NextRequest) {
     const contextSnippet = payload.context?.slice(0, MAX_CONTEXT_LENGTH);
     const evidences = payload.evidences.slice(0, 6);
 
-    const deepseekVerdict = await deepseekVerify({
+    const qwenVerdict = await qwenVerify({
       claim: payload.claim,
       evidences,
       context: contextSnippet
     });
-    if (deepseekVerdict) {
-      const response = VerifyResponseSchema.parse([deepseekVerdict]);
+    if (qwenVerdict) {
+      const response = VerifyResponseSchema.parse([qwenVerdict]);
       return NextResponse.json(response);
     }
 

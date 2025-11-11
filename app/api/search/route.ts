@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { deepseekSearch } from '@/lib/deepseekSearch';
+import { qwenSearch } from '@/lib/qwenSearch';
 import { buildNormalizedFacets } from '@/lib/claimContext';
 import { SearchRequestSchema, SearchResponseSchema } from '@/lib/schemas';
 
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const contextSnippet = payload.context?.slice(0, MAX_CONTEXT_LENGTH);
     const facets = buildNormalizedFacets(payload.claim);
 
-    const evidences = await deepseekSearch({
+    const evidences = await qwenSearch({
       claim: payload.claim,
       context: contextSnippet,
       facets,

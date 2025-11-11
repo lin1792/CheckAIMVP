@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callDeepseekJSON } from '@/lib/deepseek';
+import { callQwenJSON } from '@/lib/qwen';
 import {
   ClaimSchema,
   ClaimsRequestSchema,
@@ -10,7 +10,7 @@ import { buildHeuristicClaim, evaluateSentence } from '@/lib/claimHeuristics';
 
 export const runtime = 'nodejs';
 
-type DeepseekClaimsResponse = {
+type QwenClaimsResponse = {
   claims: Claim[];
   uncertain_reason?: string | null;
 };
@@ -181,7 +181,7 @@ async function runDeepseekForCandidates(params: {
     }
   ];
 
-  const response = await callDeepseekJSON<DeepseekClaimsResponse>(prompt, { claims: fallback }, {
+  const response = await callQwenJSON<QwenClaimsResponse>(prompt, { claims: fallback }, {
     maxRetries: 2
   });
   const sanitized = sanitizeClaims(response.claims ?? [], fallback);
@@ -234,13 +234,13 @@ export async function POST(req: NextRequest) {
     const allowClaims = await runDeepseekForCandidates({
       mode: 'allow',
       candidates: allowCandidates,
-      context,
+      context: context ?? undefined,
       fallback: allowFallback
     });
     const reviewClaims = await runDeepseekForCandidates({
       mode: 'review',
       candidates: reviewCandidates,
-      context,
+      context: context ?? undefined,
       fallback: reviewFallback
     });
 

@@ -1,4 +1,4 @@
-import { callDeepseekJSON } from './deepseek';
+import { callQwenJSON } from './qwen';
 
 type Score = {
   entail: number;
@@ -6,10 +6,10 @@ type Score = {
   neutral: number;
 };
 
-type DeepseekNLIResponse = Score & { uncertain_reason?: string | null };
+type QwenNLIResponse = Score & { uncertain_reason?: string | null };
 
 export async function entailmentScore(claim: string, evidence: string, context?: string): Promise<Score> {
-  const fallback: DeepseekNLIResponse = {
+  const fallback: QwenNLIResponse = {
     entail: 0.34,
     contradict: 0.33,
     neutral: 0.33,
@@ -27,7 +27,7 @@ export async function entailmentScore(claim: string, evidence: string, context?:
     }
   ];
 
-  const result = await callDeepseekJSON<DeepseekNLIResponse>(prompt, fallback);
+  const result = await callQwenJSON<QwenNLIResponse>(prompt, fallback);
   const { entail, contradict, neutral } = result as Score;
   return normalizeScore({ entail, contradict, neutral });
 }

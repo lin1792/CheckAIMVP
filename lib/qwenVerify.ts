@@ -1,7 +1,7 @@
-import { callDeepseekJSON, type ChatMessage } from './deepseek';
+import { callQwenJSON, type ChatMessage } from './qwen';
 import type { Claim, EvidenceCandidate, Verification } from './schemas';
 
-type DeepseekVerificationResponse = {
+type QwenVerificationResponse = {
   label: Verification['label'];
   confidence: number;
   reason: string;
@@ -11,19 +11,19 @@ type DeepseekVerificationResponse = {
   }>;
 };
 
-const DEFAULT_RESPONSE: DeepseekVerificationResponse = {
+const DEFAULT_RESPONSE: QwenVerificationResponse = {
   label: 'INSUFFICIENT',
   confidence: 0.4,
   reason: '未获得可用证据',
   citations: []
 };
 
-export async function deepseekVerify(params: {
+export async function qwenVerify(params: {
   claim: Claim;
   evidences: EvidenceCandidate[];
   context?: string;
 }): Promise<Verification | null> {
-  if (!process.env.DEEPSEEK_API_KEY) return null;
+  if (!process.env.QWEN_API_KEY) return null;
   const { claim, evidences, context } = params;
   if (!evidences.length) return null;
 
@@ -44,14 +44,14 @@ export async function deepseekVerify(params: {
   const system: ChatMessage = {
     role: 'system',
     content:
-      '你是联网事实核查裁定器。结合提供的证据，输出 JSON {"label":"SUPPORTED|REFUTED|DISPUTED|INSUFFICIENT","confidence":0-1,"reason":string,"citations":[{"url":string,"title":string}]}，理由需引用证据编号或来源名。不得臆造引用。'
+      '你是通义千问（Qwen Plus）事实核查裁定器。结合提供的证据，输出 JSON {"label":"SUPPORTED|REFUTED|DISPUTED|INSUFFICIENT","confidence":0-1,"reason":string,"citations":[{"url":string,"title":string}]}，理由需引用证据编号或来源名，禁止臆造引用。'
   };
   const user: ChatMessage = {
     role: 'user',
     content: JSON.stringify(payload)
   };
 
-  const res = await callDeepseekJSON<DeepseekVerificationResponse>([system, user], DEFAULT_RESPONSE, {
+  const res = await callQwenJSON<QwenVerificationResponse>([system, user], DEFAULT_RESPONSE, {
     maxRetries: 2
   });
   const verdict = normalizeResponse(res);
@@ -64,7 +64,7 @@ export async function deepseekVerify(params: {
   };
 }
 
-function normalizeResponse(res: DeepseekVerificationResponse): DeepseekVerificationResponse {
+function normalizeResponse(res: QwenVerificationResponse): QwenVerificationResponse {
   if (!res) return DEFAULT_RESPONSE;
   const label = mapLabel(res.label);
   const confidence = clamp(res.confidence ?? 0.4);
