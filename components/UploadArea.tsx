@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import clsx from 'clsx';
 import { useTranslation } from './LanguageProvider';
 
@@ -19,6 +19,7 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const { t } = useTranslation();
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -31,6 +32,15 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
     await onSubmit({ file, text: text.trim() || undefined });
   };
 
+  const handleFiles = useCallback((nextFile?: File) => {
+    if (!nextFile) return;
+    const allowed = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+    if (nextFile && (allowed.includes(nextFile.type) || nextFile.name.endsWith('.docx') || nextFile.name.endsWith('.doc'))) {
+      setFile(nextFile);
+      setError(null);
+    }
+  }, []);
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -40,8 +50,26 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
         <label
           className={clsx(
             'flex-1 cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition',
-            file ? 'border-accent bg-blue-50/50' : 'border-slate-200 hover:border-accent'
+            file
+              ? 'border-accent bg-blue-50/50'
+              : isDragging
+                ? 'border-accent bg-blue-50/30'
+                : 'border-slate-200 hover:border-accent'
           )}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            const dropped = event.dataTransfer?.files?.[0];
+            handleFiles(dropped);
+          }}
         >
           <input
             type="file"
@@ -49,11 +77,16 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
             className="hidden"
             onChange={(event) => {
               const nextFile = event.target.files?.[0];
-              setFile(nextFile ?? undefined);
+              if (!nextFile) return;
+              handleFiles(nextFile);
             }}
           />
           <p className="text-sm text-slate-500">{t('upload.hint')}</p>
-          {file ? <p className="mt-2 font-medium text-slate-800">{file.name}</p> : null}
+          {file ? (
+            <p className="mt-2 font-medium text-slate-800">{file.name}</p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-400">{t('upload.dragHint')}</p>
+          )}
         </label>
         <div className="flex-1">
           <textarea

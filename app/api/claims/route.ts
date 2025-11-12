@@ -7,6 +7,7 @@ import {
   type Claim
 } from '@/lib/schemas';
 import { buildHeuristicClaim, evaluateSentence } from '@/lib/claimHeuristics';
+import { generateFallbackQueries, sanitizeQueries } from '@/lib/searchQueries';
 
 export const runtime = 'nodejs';
 
@@ -58,12 +59,13 @@ function fallbackClaims(sentences: string[], fallbackMapping: Claim['source_span
       normalized,
       checkworthy: true,
       confidence: 0.4,
-      source_span
+      source_span,
+      search_queries: generateFallbackQueries({ text, normalized })
     });
   });
 }
 
-function sanitizeClaims(rawClaims: unknown[], fallback: Claim[]): Claim[] {
+function sanitizeClaims(rawClaims: unknown[], fallback: Claim[], context?: string): Claim[] {
   const safeFallback = fallback.length
     ? fallback
     : [
@@ -121,6 +123,15 @@ function sanitizeClaims(rawClaims: unknown[], fallback: Claim[]): Claim[] {
     const sourceSpan =
       claim.source_span ?? fallbackClaim.source_span ?? { paragraphIndex: 0, sentenceIndex: idx };
 
+    const aiQueries = Array.isArray((claim as any)?.search_queries)
+      ? sanitizeQueries(((claim as any)?.search_queries ?? []) as string[])
+      : [];
+    const fallbackQueries = generateFallbackQueries(
+      { text: coerceString(claim.text) ?? fallbackClaim.text, normalized },
+      { context }
+    );
+    const searchQueries = aiQueries.length ? aiQueries : fallbackQueries;
+
     return {
       id: coerceString(claim.id) ?? crypto.randomUUID(),
       text: coerceString(claim.text) ?? fallbackClaim.text,
@@ -131,7 +142,8 @@ function sanitizeClaims(rawClaims: unknown[], fallback: Claim[]): Claim[] {
         typeof claim.confidence === 'number'
           ? Math.min(Math.max(claim.confidence, 0), 1)
           : fallbackClaim.confidence,
-      source_span: sourceSpan
+      source_span: sourceSpan,
+      search_queries: searchQueries
     };
   });
 }
@@ -164,7 +176,7 @@ async function runDeepseekForCandidates(params: {
   const prompt = [
     {
       role: 'system' as const,
-      content: `${systemPrompt} 输出严格 JSON {"claims":[Claim,...],"uncertain_reason":string|null}。Claim 必须包含 id,text,normalized,checkworthy,confidence,source_span。normalized 要给出 subject/predicate/object，缺失字段请省略。候选中每条含 signals 数组：若 signals 含 "url"、"non_sentence" 或句子显然不是完整陈述，必须跳过。不得生成未在候选中的句子。`
+      content: `${systemPrompt} 输出严格 JSON {"claims":[Claim,...],"uncertain_reason":string|null}。Claim 必须包含 id,text,normalized,checkworthy,confidence,source_span,search_queries。normalized 要给出 subject/predicate/object，缺失字段请省略。search_queries 是供搜索引擎使用的关键词数组，请给 2-3 条最能覆盖事实主体、发生时间、地点的查询词，避免无关修辞。候选中每条含 signals 数组：若 signals 含 "url"、"non_sentence" 或句子显然不是完整陈述，必须跳过。不得生成未在候选中的句子。`
     },
     {
       role: 'user' as const,
@@ -184,7 +196,7 @@ async function runDeepseekForCandidates(params: {
   const response = await callQwenJSON<QwenClaimsResponse>(prompt, { claims: fallback }, {
     maxRetries: 2
   });
-  const sanitized = sanitizeClaims(response.claims ?? [], fallback);
+  const sanitized = sanitizeClaims(response.claims ?? [], fallback, context ?? undefined);
   const filtered = sanitized.filter((claim) => isValidClaimText(claim.text));
   if (filtered.length) {
     return ClaimsResponseSchema.parse(filtered);

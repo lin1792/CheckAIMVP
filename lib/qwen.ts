@@ -12,22 +12,25 @@ export const qwenClient = new OpenAI({
   baseURL
 });
 
-type CallOptions = {
+type CompletionOptions = {
   model?: string;
   maxRetries?: number;
   extraBody?: Record<string, unknown>;
+  responseFormat?: OpenAI.ChatCompletionCreateParamsNonStreaming['response_format'];
+  topLevelParams?: Record<string, unknown>;
 };
 
-export async function callQwenJSON<T>(
+export type CallOptions = Omit<CompletionOptions, 'responseFormat'>;
+
+export async function callQwenCompletion(
   messages: ChatMessage[],
-  fallback: T,
-  opts?: CallOptions
-): Promise<T> {
+  opts?: CompletionOptions
+): Promise<OpenAI.ChatCompletion | null> {
   const model = opts?.model ?? 'qwen-plus';
   const maxRetries = opts?.maxRetries ?? 1;
 
   if (!process.env.QWEN_API_KEY) {
-    return fallback;
+    return null;
   }
 
   let attempt = 0;
@@ -39,28 +42,30 @@ export async function callQwenJSON<T>(
       const request: OpenAI.ChatCompletionCreateParamsNonStreaming = {
         model,
         messages: payload,
-        response_format: { type: 'json_object' },
         stream: false
       };
+      if (opts?.responseFormat) {
+        request.response_format = opts.responseFormat;
+      }
       if (opts?.extraBody) {
         (request as any).extra_body = opts.extraBody;
       }
+      if (opts?.topLevelParams) {
+        Object.assign(request as unknown as Record<string, unknown>, opts.topLevelParams);
+      }
       const completion = await qwenClient.chat.completions.create(request);
-
-      const content = completion.choices[0]?.message?.content ?? '';
-      const parsed = JSON.parse(content) as T;
-      return parsed;
+      return completion;
     } catch (error) {
       lastError = error;
       attempt += 1;
       if (attempt > maxRetries) {
-        console.warn('Qwen JSON parsing failed, using fallback', error);
-        return fallback;
+        console.warn('Qwen completion failed', error);
+        return null;
       }
       const reminder: ChatMessage = {
         role: 'system',
         content:
-          '上一次输出格式错误。请严格只输出 JSON 对象，缺失字段使用 null，并补充 uncertain_reason。'
+          '上一次输出格式错误。请严格按照要求作答，并保持 JSON 可解析。'
       };
       payload =
         payload.length > 0 ? [payload[0], reminder, ...payload.slice(1)] : [reminder];
@@ -68,5 +73,27 @@ export async function callQwenJSON<T>(
   }
 
   console.warn('Qwen fallback triggered', lastError);
-  return fallback;
+  return null;
+}
+
+export async function callQwenJSON<T>(
+  messages: ChatMessage[],
+  fallback: T,
+  opts?: CallOptions
+): Promise<T> {
+  const completion = await callQwenCompletion(messages, {
+    ...opts,
+    responseFormat: { type: 'json_object' }
+  });
+  if (!completion) {
+    return fallback;
+  }
+  try {
+    const content = completion.choices[0]?.message?.content ?? '';
+    const parsed = JSON.parse(content) as T;
+    return parsed;
+  } catch (error) {
+    console.warn('Qwen JSON parsing failed, using fallback', error);
+    return fallback;
+  }
 }

@@ -1,11 +1,11 @@
 # CheckAI Fact-Checking MVP
 
-Next.js (App Router) + TypeScript + Tailwind 实现的事实核查最小可用产品，覆盖 `.docx`/文本摄取、Qwen Plus 结构化抽取、Qwen 联网检索、NLI 判定、可视化与 Markdown 报告导出。
+Next.js (App Router) + TypeScript + Tailwind 实现的事实核查最小可用产品，覆盖 `.docx`/文本摄取、Qwen Plus 结构化抽取、自定义 Serper 检索、NLI 判定、可视化与 Markdown 报告导出。
 
 ## 功能速览
 - `.docx` 上传 & 文本粘贴：`mammoth` 解析段落/句子，并保持映射以便高亮。
 - 可核查陈述识别：`/api/claims` 调用 Qwen Plus（OpenAI 兼容）输出严格 JSON，经 Zod 校验。
-- Qwen 联网检索：`/api/search` 直接调用 Qwen Plus 提供的联网模式，返回结构化证据列表并本地归一化。
+- Serper 联网检索：`/api/search` 使用 Serper (Google Search API) 获取权威网页，再经本地归一化。
 - 事实核验：`/api/verify` 直接调用 Qwen Plus NLI 代理，`lib/scoring.ts` 融合权重得到标签+置信度。
 - UI：左侧原文同步高亮，右侧陈述列表 + 过滤 + 证据抽屉；顶部 SummaryBar 与 Markdown 导出按钮。
 - 报告导出：`/api/report` 生成含引用列表的 Markdown，前端可直接下载。
@@ -28,6 +28,9 @@ tests/        // Vitest 单元测试
 | 变量 | 说明 | 获取方式 |
 | --- | --- | --- |
 | `QWEN_API_KEY` | Qwen Plus API Key | [DashScope 控制台](https://dashscope.aliyun.com/) 申请，填入 `lib/qwen.ts` 默认 baseURL 可覆盖 `QWEN_BASE_URL` |
+| `SERPER_API_KEY` | Serper (Google Search API) 密钥 | [Serper.dev](https://serper.dev) 控制台创建 |
+| `SERPER_LOCATION` | Serper 搜索地区 (gl) | 默认 `us` |
+| `SERPER_LANGUAGE` | Serper 搜索语言 (hl) | 默认 `en` |
 | `SUPPORT_THRESHOLD` `REFUTE_THRESHOLD` `COVERAGE_DIVISOR` `CONFIDENCE_BASE_WEIGHT` | 置信度/融合参数 | 可按需要在 `.env` 调整 |
 
 ## 本地开发
@@ -51,7 +54,7 @@ pnpm test
 Vitest 在 `tests/` 下运行解析与打分单元测试，可扩展更多场景。
 
 ## 检索 & NLI 切换
-- **检索通道**：`/api/search` 统一使用 Qwen Plus 联网模式，后端会根据返回内容做去重与权威度估计。
+- **检索通道**：`/api/search` 通过 Serper (Google Search API) 获取网页，再结合域名白名单去重与权威度估计。
 - **NLI 实现**：`lib/nli.ts` 直接调用 `callQwenJSON` 生成三分类分布，可在 README 中说明当前使用策略。
 
 ## API 摘要

@@ -66,7 +66,8 @@ export const ClaimSchema = z.object({
   normalized: NormalizedClaimSchema,
   checkworthy: z.boolean(),
   confidence: z.number().min(0).max(1),
-  source_span: SourceSpanSchema
+  source_span: SourceSpanSchema,
+  search_queries: z.array(z.string().min(1)).default([])
 });
 
 export const EvidenceCandidateSchema = z.object({

@@ -44,7 +44,7 @@ export async function qwenVerify(params: {
   const system: ChatMessage = {
     role: 'system',
     content:
-      '你是通义千问（Qwen Plus）事实核查裁定器。结合提供的证据，输出 JSON {"label":"SUPPORTED|REFUTED|DISPUTED|INSUFFICIENT","confidence":0-1,"reason":string,"citations":[{"url":string,"title":string}]}，理由需引用证据编号或来源名，禁止臆造引用。'
+      '你是事实核查裁定器。结合提供的证据，输出 JSON {"label":"SUPPORTED|REFUTED|DISPUTED|INSUFFICIENT","confidence":0-1,"reason":string,"citations":[{"url":string,"title":string}]}。理由必须使用自然语言，引用证据时请使用 [ref_<number>] 形式或直接提及来源名称，严禁提到 JSON 字段名（如 id、claims）或任何代码术语，禁止臆造引用。'
   };
   const user: ChatMessage = {
     role: 'user',
@@ -68,7 +68,7 @@ function normalizeResponse(res: QwenVerificationResponse): QwenVerificationRespo
   if (!res) return DEFAULT_RESPONSE;
   const label = mapLabel(res.label);
   const confidence = clamp(res.confidence ?? 0.4);
-  const reason = (res.reason ?? '').trim() || DEFAULT_RESPONSE.reason;
+  const reason = cleanReason(res.reason ?? '');
   const citations = Array.isArray(res.citations)
     ? res.citations
         .map((c) => ({
@@ -91,4 +91,12 @@ function mapLabel(label: string | undefined): Verification['label'] {
 function clamp(value: number): number {
   if (!Number.isFinite(value)) return 0.4;
   return Math.max(0.1, Math.min(1, Number(value.toFixed(3))));
+}
+
+function cleanReason(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return DEFAULT_RESPONSE.reason;
+  const withoutCodeRefs = trimmed.replace(/\(?(?:id|ID)\s*:\s*[^)]+\)?/g, '').replace(/`{1,3}[^`]+`{1,3}/g, '');
+  const normalized = withoutCodeRefs.replace(/\s{2,}/g, ' ').trim();
+  return normalized || DEFAULT_RESPONSE.reason;
 }

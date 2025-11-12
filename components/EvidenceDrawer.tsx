@@ -1,7 +1,9 @@
 'use client';
 
 import clsx from 'clsx';
+import type { ReactNode } from 'react';
 import type { Claim, EvidenceCandidate, Verification } from '@/lib/schemas';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from './LanguageProvider';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -22,6 +24,13 @@ const labelColor: Record<Verification['label'], string> = {
 
 export default function EvidenceDrawer({ open, claim, evidences, verification, onClose }: Props) {
   const { t } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (open && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [open, claim?.id]);
   return (
     <div
       className={clsx(
@@ -40,7 +49,7 @@ export default function EvidenceDrawer({ open, claim, evidences, verification, o
           {t('drawer.close')}
         </button>
       </div>
-      <div className="h-[calc(100%-64px)] overflow-y-auto p-4">
+      <div ref={scrollRef} className="h-[calc(100%-64px)] overflow-y-auto p-4">
         {verification ? (
           <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm">
             <p className="font-semibold text-slate-700">{t('drawer.verdict')}</p>
@@ -50,18 +59,19 @@ export default function EvidenceDrawer({ open, claim, evidences, verification, o
             <p className="text-xs text-slate-500">
               {t('drawer.confidence', { value: Math.round(verification.confidence * 100) })}
             </p>
-            <p className="mt-2 text-sm text-slate-600">{verification.reason}</p>
+            <p className="mt-2 text-sm text-slate-600">{renderReason(verification.reason, verification.citations)}</p>
           </div>
         ) : null}
         {evidences.length === 0 ? (
           <p className="text-sm text-slate-500">{t('drawer.noEvidence')}</p>
         ) : (
           <ul className="space-y-3">
-            {evidences.map((evidence) => (
+            {evidences.map((evidence, index) => (
               <li key={evidence.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  {t(`sources.${evidence.source}` as TranslationKey)}
-                </p>
+                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                  <p>{t(`sources.${evidence.source}` as TranslationKey)}</p>
+                  <span className="text-slate-500">#{index + 1}</span>
+                </div>
                 <a
                   href={evidence.url}
                   target="_blank"
@@ -82,4 +92,39 @@ export default function EvidenceDrawer({ open, claim, evidences, verification, o
       </div>
     </div>
   );
+}
+
+function renderReason(reason: string, citations: string[]): ReactNode {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  const pattern = /\[ref_(\d+)\]/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(reason))) {
+    const matchIndex = match.index ?? 0;
+    if (matchIndex > lastIndex) {
+      nodes.push(reason.slice(lastIndex, matchIndex));
+    }
+    const refNumber = Number(match[1]);
+    const url = citations[refNumber - 1];
+    if (url) {
+      nodes.push(
+        <a
+          key={`${url}-${matchIndex}`}
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline"
+        >
+          {`[ref_${refNumber}]`}
+        </a>
+      );
+    } else {
+      nodes.push(match[0]);
+    }
+    lastIndex = matchIndex + match[0].length;
+  }
+  if (lastIndex < reason.length) {
+    nodes.push(reason.slice(lastIndex));
+  }
+  return <>{nodes}</>;
 }
