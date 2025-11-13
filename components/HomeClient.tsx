@@ -17,6 +17,10 @@ import type {
   Verification
 } from '@/lib/schemas';
 
+const rawConcurrency = Number(process.env.NEXT_PUBLIC_VERIFICATION_CONCURRENCY ?? 2);
+const VERIFY_CONCURRENCY =
+  Number.isFinite(rawConcurrency) && rawConcurrency > 0 ? Math.min(Math.floor(rawConcurrency), 6) : 2;
+
 const emptyStats = {
   SUPPORTED: 0,
   REFUTED: 0,
@@ -148,11 +152,21 @@ export default function HomeClient() {
         if (stopRequestedRef.current) return;
         setClaims(data);
         setClaimsLoading(false);
-        for (const claim of data) {
-          if (stopRequestedRef.current) break;
-          // eslint-disable-next-line no-await-in-loop
-          await processClaim(claim);
-        }
+
+        const queue = [...data];
+        let cursor = 0;
+        const workerCount = Math.max(1, Math.min(VERIFY_CONCURRENCY, queue.length));
+
+        const runWorker = async () => {
+          while (!stopRequestedRef.current) {
+            const claim = queue[cursor];
+            cursor += 1;
+            if (!claim) break;
+            await processClaim(claim);
+          }
+        };
+
+        await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
       } catch (err) {
         if (stopRequestedRef.current || isAbortError(err)) {
           return;
