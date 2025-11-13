@@ -10,9 +10,21 @@ type Props = {
   stats: Record<Verification['label'], number>;
   onExport: () => Promise<void>;
   exporting: boolean;
+  inProgress: boolean;
+  elapsedSeconds: number;
+  lastDuration: number;
 };
 
-export default function SummaryBar({ claimsCount, verifiedCount, stats, onExport, exporting }: Props) {
+export default function SummaryBar({
+  claimsCount,
+  verifiedCount,
+  stats,
+  onExport,
+  exporting,
+  inProgress,
+  elapsedSeconds,
+  lastDuration
+}: Props) {
   const readyToExport = claimsCount > 0 && verifiedCount > 0;
   const { t } = useTranslation();
   const summaryItems: Array<{ key: TranslationKey; value: number }> = [
@@ -30,14 +42,27 @@ export default function SummaryBar({ claimsCount, verifiedCount, stats, onExport
           <span key={item.key}>{t(item.key, { count: item.value })}</span>
         ))}
       </div>
-      <button
-        type="button"
-        disabled={!readyToExport || exporting}
-        onClick={onExport}
-        className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {exporting ? t('summary.exporting') : t('summary.export')}
-      </button>
+      <div className="text-right">
+        <button
+          type="button"
+          disabled={!readyToExport || exporting}
+          onClick={onExport}
+          className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {exporting ? t('summary.exporting') : t('summary.export')}
+        </button>
+        {inProgress ? (
+          <p className="mt-1 text-xs text-slate-500 leading-snug">
+            {t('summary.timer', { seconds: elapsedSeconds })}
+            <br />
+            {t('summary.reminder')}
+          </p>
+        ) : lastDuration > 0 ? (
+          <p className="mt-1 text-xs text-slate-500 leading-snug">
+            {t('summary.completedTimer', { seconds: lastDuration })}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

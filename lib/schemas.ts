@@ -131,7 +131,7 @@ export const ReportRequestSchema = z.object({
 });
 
 export const ReportResponseSchema = z.object({
-  markdown: z.string().min(10)
+  html: z.string().min(10)
 });
 
 export type Claim = z.infer<typeof ClaimSchema>;

@@ -54,6 +54,9 @@ export async function qwenVerify(params: {
   const res = await callQwenJSON<QwenVerificationResponse>([system, user], DEFAULT_RESPONSE, {
     maxRetries: 2
   });
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[verify] raw response', JSON.stringify(res));
+  }
   const verdict = normalizeResponse(res);
   return {
     claimId: claim.id,

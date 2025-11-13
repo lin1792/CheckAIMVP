@@ -39,62 +39,80 @@ export default function EvidenceDrawer({ open, claim, evidences, verification, o
       )}
     >
       <div className="flex items-center justify-between border-b border-slate-100 p-4">
-        <div>
+        <div className="pr-4">
           <p className="text-xs uppercase text-slate-400">{t('drawer.title')}</p>
           <p className="text-sm font-semibold text-slate-800">
             {claim ? claim.text.slice(0, 80) : t('drawer.noClaim')}
           </p>
         </div>
-        <button type="button" onClick={onClose} className="text-sm text-slate-500">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm text-slate-500 whitespace-nowrap"
+        >
           {t('drawer.close')}
         </button>
       </div>
-      <div ref={scrollRef} className="h-[calc(100%-64px)] overflow-y-auto p-4">
+      <div ref={scrollRef} className="h-[calc(100%-64px)] overflow-y-auto p-4 space-y-4">
         {verification ? (
-          <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm">
-            <p className="font-semibold text-slate-700">{t('drawer.verdict')}</p>
+          <section className="rounded-xl bg-slate-50 p-3 text-sm shadow-sm">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {t('drawer.verdict')}
+            </h3>
             <p className={clsx('mt-1 text-base font-bold', labelColor[verification.label])}>
               {t(`labels.${verification.label}` as TranslationKey)}
             </p>
             <p className="text-xs text-slate-500">
               {t('drawer.confidence', { value: Math.round(verification.confidence * 100) })}
             </p>
-            <p className="mt-2 text-sm text-slate-600">{renderReason(verification.reason, verification.citations)}</p>
-          </div>
+            <p className="mt-3 text-sm leading-relaxed text-slate-700">
+              {renderReason(verification.reason, evidences, verification.citations)}
+            </p>
+          </section>
         ) : null}
         {evidences.length === 0 ? (
           <p className="text-sm text-slate-500">{t('drawer.noEvidence')}</p>
         ) : (
-          <ul className="space-y-3">
-            {evidences.map((evidence, index) => (
-              <li key={evidence.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-                  <p>{t(`sources.${evidence.source}` as TranslationKey)}</p>
-                  <span className="text-slate-500">#{index + 1}</span>
-                </div>
-                <a
-                  href={evidence.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 block font-semibold text-accent"
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              {t('claims.evidenceCount', { count: evidences.length })}
+            </h3>
+            <ul className="space-y-3">
+              {evidences.map((evidence, index) => (
+                <li
+                  key={evidence.id}
+                  className="rounded-xl border border-slate-200 p-3 text-sm bg-white shadow-sm"
                 >
-                  {evidence.title}
-                </a>
-                <p className="mt-1 text-slate-600">{evidence.quote}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {t('drawer.authority', { value: (evidence.authority * 100).toFixed(0) })}
-                  {evidence.published_at ? ` · ${new Date(evidence.published_at).toLocaleDateString()}` : ''}
-                </p>
-              </li>
-            ))}
-          </ul>
+                  <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                    <p>{t(`sources.${evidence.source}` as TranslationKey)}</p>
+                    <span className="text-slate-500">#{index + 1}</span>
+                  </div>
+                  <a
+                    href={evidence.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block font-semibold text-accent hover:underline"
+                  >
+                    {evidence.title}
+                  </a>
+                  <p className="mt-1 text-slate-600 leading-relaxed">
+                    {truncateQuote(evidence.quote)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {t('drawer.authority', { value: (evidence.authority * 100).toFixed(0) })}
+                    {evidence.published_at ? ` · ${new Date(evidence.published_at).toLocaleDateString()}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </div>
   );
 }
 
-function renderReason(reason: string, citations: string[]): ReactNode {
+function renderReason(reason: string, evidences: EvidenceCandidate[], citations?: string[]): ReactNode {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   const pattern = /\[ref_(\d+)\]/gi;
@@ -105,7 +123,7 @@ function renderReason(reason: string, citations: string[]): ReactNode {
       nodes.push(reason.slice(lastIndex, matchIndex));
     }
     const refNumber = Number(match[1]);
-    const url = citations[refNumber - 1];
+    const url = evidences[refNumber - 1]?.url ?? citations?.[refNumber - 1];
     if (url) {
       nodes.push(
         <a
@@ -115,7 +133,7 @@ function renderReason(reason: string, citations: string[]): ReactNode {
           rel="noreferrer"
           className="text-accent underline"
         >
-          {`[ref_${refNumber}]`}
+          {`[证据${refNumber}]`}
         </a>
       );
     } else {
@@ -127,4 +145,10 @@ function renderReason(reason: string, citations: string[]): ReactNode {
     nodes.push(reason.slice(lastIndex));
   }
   return <>{nodes}</>;
+}
+
+function truncateQuote(text: string, maxLength = 220): string {
+  if (!text) return '暂无可引用摘要';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trim()}…`;
 }

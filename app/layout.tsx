@@ -3,8 +3,21 @@ import './globals.css';
 import { LanguageProvider } from '@/components/LanguageProvider';
 
 export const metadata: Metadata = {
-  title: 'CheckAI MVP',
-  description: 'Rapid fact-checking assistant with doc ingestion and evidence verification.'
+  title: 'ProofKit · 证据工作台',
+  description:
+    'ProofKit 证据工作台，支持 Word/文本上传，一键提炼可核查陈述、搜索权威证据并生成 .doc 核查报告。',
+  keywords: [
+    'ProofKit',
+    '证据工作台',
+    '事实核查',
+    'AI 查证',
+    'Word 报告'
+  ],
+  openGraph: {
+    title: 'ProofKit · 证据工作台',
+    description:
+      '上传文档、自动提炼陈述、匹配权威证据并导出核查报告，ProofKit 让事实核查更高效。'
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

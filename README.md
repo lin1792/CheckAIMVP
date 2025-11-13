@@ -1,14 +1,14 @@
-# CheckAI Fact-Checking MVP
+# ProofKit Evidence Workspace
 
-Next.js (App Router) + TypeScript + Tailwind 实现的事实核查最小可用产品，覆盖 `.docx`/文本摄取、Qwen Plus 结构化抽取、自定义 Serper 检索、NLI 判定、可视化与 Markdown 报告导出。
+ProofKit（Next.js + TypeScript + Tailwind）是一套面向内容团队的 AI 证据工作台，支持 Word/文本摄取、Qwen Plus 结构化抽取、自定义 Serper 检索、AI 核验与可下载的 `.doc` 核查报告。
 
 ## 功能速览
 - `.docx` 上传 & 文本粘贴：`mammoth` 解析段落/句子，并保持映射以便高亮。
 - 可核查陈述识别：`/api/claims` 调用 Qwen Plus（OpenAI 兼容）输出严格 JSON，经 Zod 校验。
 - Serper 联网检索：`/api/search` 使用 Serper (Google Search API) 获取权威网页，再经本地归一化。
 - 事实核验：`/api/verify` 直接调用 Qwen Plus NLI 代理，`lib/scoring.ts` 融合权重得到标签+置信度。
-- UI：左侧原文同步高亮，右侧陈述列表 + 过滤 + 证据抽屉；顶部 SummaryBar 与 Markdown 导出按钮。
-- 报告导出：`/api/report` 生成含引用列表的 Markdown，前端可直接下载。
+- UI：左侧原文同步高亮，右侧陈述列表 + 过滤 + 证据抽屉；顶部 SummaryBar 显示耗时提醒并支持导出。
+- 报告导出：`/api/report` 生成含引用列表的 HTML，前端打包为 `.doc` 方便在 Word 中编辑。
 - 健壮性：所有 API 输入/输出均由 Zod 校验；Qwen JSON 失败自动重试并有 fallback 模板。
 - 测试：`tests/parsing.test.ts`、`tests/scoring.test.ts` 覆盖解析与打分逻辑。
 

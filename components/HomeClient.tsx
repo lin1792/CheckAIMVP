@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import UploadArea, { type UploadPayload } from './UploadArea';
 import DocPreview from './DocPreview';
 import ClaimsList from './ClaimsList';
@@ -8,6 +8,7 @@ import EvidenceDrawer from './EvidenceDrawer';
 import Filters from './Filters';
 import SummaryBar from './SummaryBar';
 import LanguageSwitcher from './LanguageSwitcher';
+import UsageSteps from './UsageSteps';
 import { useTranslation } from './LanguageProvider';
 import type {
   Claim,
@@ -37,6 +38,9 @@ export default function HomeClient() {
   const [exporting, setExporting] = useState(false);
   const abortControllersRef = useRef<AbortController[]>([]);
   const stopRequestedRef = useRef(false);
+  const [verificationStart, setVerificationStart] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [lastDuration, setLastDuration] = useState(0);
   const { t } = useTranslation();
 
   const isAbortError = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
@@ -73,6 +77,7 @@ export default function HomeClient() {
   }, [parsedDoc]);
 
   const contextPayload = documentContext ? documentContext : undefined;
+  const verificationInProgress = verificationStart !== null;
 
   const processClaim = useCallback(async (claim: Claim) => {
     if (stopRequestedRef.current) return;
@@ -125,6 +130,9 @@ export default function HomeClient() {
       setSelectedClaimId(null);
       setDrawerOpen(false);
       setClaimsLoading(true);
+      setVerificationStart(Date.now());
+      setElapsedSeconds(0);
+      setLastDuration(0);
       try {
         const res = await fetchWithAbort('/api/claims', {
           method: 'POST',
@@ -151,6 +159,8 @@ export default function HomeClient() {
         }
         console.error(err);
         setError(t('errors.claimsFailed'));
+        setVerificationStart(null);
+        setElapsedSeconds(0);
       } finally {
         setClaimsLoading(false);
       }
@@ -196,6 +206,8 @@ export default function HomeClient() {
         }
         console.error(err);
         setError(t('errors.uploadFailed'));
+        setVerificationStart(null);
+        setElapsedSeconds(0);
       } finally {
         setUploading(false);
       }
@@ -203,12 +215,38 @@ export default function HomeClient() {
     [fetchClaims, t, fetchWithAbort]
   );
 
+  useEffect(() => {
+    if (!verificationStart) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - verificationStart) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [verificationStart]);
+
+  useEffect(() => {
+    if (
+      !verificationStart ||
+      claims.length === 0 ||
+      Object.keys(verificationMap).length < claims.length
+    ) {
+      return;
+    }
+    setVerificationStart(null);
+    setLastDuration(elapsedSeconds);
+  }, [verificationStart, claims.length, verificationMap, elapsedSeconds]);
+
   const handleStop = useCallback(() => {
     stopRequestedRef.current = true;
     abortAllRequests();
     setClaimsLoading(false);
     setUploading(false);
     setError(t('errors.stopped'));
+    setVerificationStart(null);
+    setElapsedSeconds(0);
+    setLastDuration(0);
   }, [abortAllRequests, t]);
 
   const toggleFilter = (label: Verification['label']) => {
@@ -241,11 +279,13 @@ export default function HomeClient() {
       });
       if (!res.ok) throw new Error('report failed');
       const data = await res.json();
-      const blob = new Blob([data.markdown], { type: 'text/markdown' });
+      const blob = new Blob([data.html], {
+        type: 'application/msword'
+      });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `checkai-report-${Date.now()}.md`;
+      anchor.download = `checkai-report-${Date.now()}.doc`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -269,6 +309,8 @@ export default function HomeClient() {
         <p className="text-sm text-slate-500">{t('home.subtitle')}</p>
       </header>
 
+      <UsageSteps />
+
       <UploadArea loading={uploading} onSubmit={handleUpload} onStop={handleStop} />
 
       {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
@@ -279,6 +321,9 @@ export default function HomeClient() {
         stats={stats}
         onExport={handleExport}
         exporting={exporting}
+        inProgress={verificationInProgress}
+        elapsedSeconds={elapsedSeconds}
+        lastDuration={lastDuration}
       />
 
       <Filters selected={filters} onToggle={toggleFilter} onClear={clearFilters} stats={stats} />

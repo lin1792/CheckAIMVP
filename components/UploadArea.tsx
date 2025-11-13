@@ -20,16 +20,25 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
   const [file, setFile] = useState<File | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [mode, setMode] = useState<'file' | 'text'>('file');
   const { t } = useTranslation();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!file && text.trim().length === 0) {
+    if (mode === 'file' && !file) {
+      setError(t('upload.validation'));
+      return;
+    }
+    if (mode === 'text' && text.trim().length === 0) {
       setError(t('upload.validation'));
       return;
     }
     setError(null);
-    await onSubmit({ file, text: text.trim() || undefined });
+    if (mode === 'file') {
+      await onSubmit({ file, text: undefined });
+    } else {
+      await onSubmit({ text: text.trim() || undefined });
+    }
   };
 
   const handleFiles = useCallback((nextFile?: File) => {
@@ -44,12 +53,39 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100"
+      className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100 space-y-4"
     >
-      <div className="flex flex-col gap-4 md:flex-row">
+      <div className="flex items-center gap-3 text-sm text-slate-600">
+        <span>{t('upload.mode.note')}</span>
+        <div className="flex gap-2">
+          {(['file', 'text'] as const).map((value) => (
+            <button
+              type="button"
+              key={value}
+              onClick={() => {
+                setMode(value);
+                setError(null);
+                if (value === 'file') {
+                  setText('');
+                } else {
+                  setFile(undefined);
+                }
+              }}
+              className={clsx(
+                'rounded-full border px-3 py-1 text-xs transition',
+                mode === value ? 'border-accent text-accent bg-blue-50/40' : 'border-slate-200 text-slate-500'
+              )}
+            >
+              {t(value === 'file' ? 'upload.mode.file' : 'upload.mode.text')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'file' ? (
         <label
           className={clsx(
-            'flex-1 cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition',
+            'block cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition',
             file
               ? 'border-accent bg-blue-50/50'
               : isDragging
@@ -88,15 +124,14 @@ export default function UploadArea({ loading, onSubmit, onStop }: Props) {
             <p className="mt-1 text-xs text-slate-400">{t('upload.dragHint')}</p>
           )}
         </label>
-        <div className="flex-1">
-          <textarea
-            className="h-32 w-full resize-none rounded-xl border border-slate-200 p-3 text-sm focus:border-accent focus:outline-none"
-            placeholder={t('upload.placeholder')}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-        </div>
-      </div>
+      ) : (
+        <textarea
+          className="h-40 w-full resize-none rounded-xl border border-slate-200 p-3 text-sm focus:border-accent focus:outline-none"
+          placeholder={t('upload.placeholder')}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+      )}
       {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
       <div className="mt-4 flex justify-end gap-2">
         {loading && onStop ? (
