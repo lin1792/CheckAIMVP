@@ -127,6 +127,9 @@ export const VerifyResponseSchema = z.array(VerificationSchema);
 export const ReportRequestSchema = z.object({
   claims: z.array(ClaimSchema),
   verifications: z.array(VerificationSchema),
+  evidenceMap: z
+    .record(z.string(), z.array(EvidenceCandidateSchema))
+    .optional(),
   generatedAt: z.string().optional()
 });
 

@@ -8,7 +8,12 @@ export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
     const payload = ReportRequestSchema.parse(json);
-    const html = buildHtmlReport(payload.claims, payload.verifications, payload.generatedAt);
+    const html = buildHtmlReport(
+      payload.claims,
+      payload.verifications,
+      payload.evidenceMap ?? {},
+      payload.generatedAt
+    );
     const response = ReportResponseSchema.parse({ html });
     return NextResponse.json(response);
   } catch (error) {

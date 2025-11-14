@@ -42,7 +42,9 @@ export async function callQwenCompletion(
       const request: OpenAI.ChatCompletionCreateParamsNonStreaming = {
         model,
         messages: payload,
-        stream: false
+        stream: false,
+        temperature: 0,
+        top_p: 1
       };
       if (opts?.responseFormat) {
         request.response_format = opts.responseFormat;
@@ -52,6 +54,12 @@ export async function callQwenCompletion(
       }
       if (opts?.topLevelParams) {
         Object.assign(request as unknown as Record<string, unknown>, opts.topLevelParams);
+      }
+      if (typeof request.temperature !== 'number') {
+        request.temperature = 0;
+      }
+      if (typeof request.top_p !== 'number') {
+        request.top_p = 1;
       }
       const completion = await qwenClient.chat.completions.create(request);
       return completion;
@@ -88,12 +96,30 @@ export async function callQwenJSON<T>(
   if (!completion) {
     return fallback;
   }
+  const content = completion.choices[0]?.message?.content ?? '';
+  const parsed = parseJSONWithRepair<T>(content);
+  if (parsed) return parsed;
+  const snippet = content.slice(0, 200);
+  console.warn('Qwen JSON parsing failed, using fallback', snippet);
+  return fallback;
+}
+
+function parseJSONWithRepair<T>(raw: string): T | null {
+  const text = raw?.trim();
+  if (!text) return null;
   try {
-    const content = completion.choices[0]?.message?.content ?? '';
-    const parsed = JSON.parse(content) as T;
-    return parsed;
-  } catch (error) {
-    console.warn('Qwen JSON parsing failed, using fallback', error);
-    return fallback;
+    return JSON.parse(text) as T;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+    let candidate = text.slice(start, end + 1);
+    candidate = candidate.replace(/,\s*(?=[}\]])/g, '');
+    candidate = candidate.replace(/[\u0000-\u001f]/g, '');
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      return null;
+    }
   }
 }

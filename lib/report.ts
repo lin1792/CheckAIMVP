@@ -1,4 +1,4 @@
-import type { Claim, Verification } from './schemas';
+import type { Claim, EvidenceCandidate, Verification } from './schemas';
 
 const LABEL_EMOJI: Record<Verification['label'], string> = {
   SUPPORTED: '✅',
@@ -14,9 +14,16 @@ const LABEL_TEXT: Record<Verification['label'], string> = {
   INSUFFICIENT: '证据不足'
 };
 
+const SOURCE_LABEL: Record<EvidenceCandidate['source'], string> = {
+  web: '网页',
+  wikipedia: '维基百科',
+  wikidata: 'Wikidata'
+};
+
 export function buildHtmlReport(
   claims: Claim[],
   verifications: Verification[],
+  evidenceMap: Record<string, EvidenceCandidate[]> = {},
   generatedAt = new Date().toISOString()
 ): string {
   const generatedDate = new Date(generatedAt ?? new Date().toISOString());
@@ -36,13 +43,10 @@ export function buildHtmlReport(
     .map((claim, index) => {
       const verdict = verifications.find((v) => v.claimId === claim.id);
       if (!verdict) return '';
-
-      const citations = (verdict.citations ?? [])
-        .map(
-          (citation, idx) =>
-            `<li>证据 ${idx + 1}：<a href="${escapeHtml(citation)}">${escapeHtml(citation)}</a></li>`
-        )
-        .join('');
+      const evidences = evidenceMap[claim.id] ?? [];
+      const citations = verdict.citations ?? [];
+      const reasonHtml = renderReasonHtml(verdict.reason, evidences, citations);
+      const evidenceBlock = buildEvidenceListHtml(evidences, citations);
 
       return `
         <section class="claim">
@@ -50,8 +54,8 @@ export function buildHtmlReport(
           <blockquote>${escapeHtml(claim.text)}</blockquote>
           <p><strong>标签：</strong>${LABEL_TEXT[verdict.label]}</p>
           <p><strong>置信度：</strong>${(verdict.confidence * 100).toFixed(1)}%</p>
-          <p><strong>理由：</strong>${escapeHtml(verdict.reason)}</p>
-          ${citations ? `<ul class="citations">${citations}</ul>` : ''}
+          <p><strong>理由：</strong><span class="verdict-reason">${reasonHtml}</span></p>
+          ${evidenceBlock}
         </section>
       `;
     })
@@ -73,6 +77,11 @@ export function buildHtmlReport(
         blockquote { margin: 12px 0; padding-left: 12px; border-left: 3px solid #94a3b8; color: #475569; }
         ul.citations { margin-top: 12px; padding-left: 18px; }
         ul.citations li { margin-bottom: 6px; }
+        .evidence-list { padding-left: 20px; }
+        .evidence-card { margin-bottom: 12px; }
+        .evidence-card h4 { margin: 4px 0; font-size: 15px; }
+        .evidence-meta { font-size: 12px; color: #64748b; }
+        .verdict-reason a { color: #2563eb; text-decoration: underline; }
         a { color: #2563eb; }
       </style>
     </head>
@@ -99,4 +108,97 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function escapeWithBreaks(text: string): string {
+  return escapeHtml(text).replace(/\n/g, '<br />');
+}
+
+function renderReasonHtml(
+  reason: string,
+  evidences: EvidenceCandidate[],
+  citations: string[]
+): string {
+  const safeReason = reason ?? '';
+  if (!safeReason.trim()) {
+    return '未提供理由';
+  }
+  const pattern = /\[ref_(\d+)\]/gi;
+  let result = '';
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(safeReason))) {
+    const start = match.index ?? 0;
+    if (start > lastIndex) {
+      result += escapeWithBreaks(safeReason.slice(lastIndex, start));
+    }
+    const refNumber = Number(match[1]);
+    const url = getReferenceUrl(evidences, citations, refNumber);
+    if (url) {
+      result += `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">[证据${refNumber}]</a>`;
+    } else {
+      result += escapeHtml(match[0]);
+    }
+    lastIndex = start + match[0].length;
+  }
+  if (lastIndex < safeReason.length) {
+    result += escapeWithBreaks(safeReason.slice(lastIndex));
+  }
+  return result || '未提供理由';
+}
+
+function getReferenceUrl(
+  evidences: EvidenceCandidate[],
+  citations: string[],
+  refNumber: number
+): string | null {
+  if (!Number.isFinite(refNumber) || refNumber <= 0) return null;
+  const idx = refNumber - 1;
+  if (evidences[idx]?.url) {
+    return evidences[idx].url;
+  }
+  if (citations[idx]) {
+    return citations[idx];
+  }
+  return null;
+}
+
+function buildEvidenceListHtml(
+  evidences: EvidenceCandidate[],
+  fallbackCitations: string[]
+): string {
+  if (evidences.length === 0) {
+    if (!fallbackCitations.length) return '';
+    const items = fallbackCitations
+      .map(
+        (citation, idx) =>
+          `<li>证据 ${idx + 1}：<a href="${escapeHtml(citation)}">${escapeHtml(citation)}</a></li>`
+      )
+      .join('');
+    return `<ul class="citations">${items}</ul>`;
+  }
+  const cards = evidences
+    .map((evidence, idx) => {
+      const authority = Math.round((evidence.authority ?? 0) * 100);
+      const published = evidence.published_at
+        ? new Date(evidence.published_at).toLocaleDateString()
+        : '';
+      return `<li class="evidence-card">
+        <div class="evidence-meta">证据 ${idx + 1} · ${SOURCE_LABEL[evidence.source] ?? evidence.source}</div>
+        <h4><a href="${escapeHtml(evidence.url)}" target="_blank" rel="noreferrer">${escapeHtml(
+          evidence.title || '未命名来源'
+        )}</a></h4>
+        <p>${escapeHtml(evidence.quote || '暂无摘录')}</p>
+        <p class="evidence-meta">权威度：${authority}%${
+          published ? ` · 发布于 ${escapeHtml(published)}` : ''
+        }</p>
+      </li>`;
+    })
+    .join('');
+  return `<section>
+    <h4>证据列表</h4>
+    <ol class="evidence-list">
+      ${cards}
+    </ol>
+  </section>`;
 }

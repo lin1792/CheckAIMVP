@@ -23,6 +23,13 @@ type CandidateSentence = {
   signals: string[];
 };
 
+type ReviewFilterResponse = {
+  decisions: Array<{
+    id: number;
+    keep: boolean;
+  }>;
+};
+
 const URL_PATTERN = /(https?:\/\/|www\.)/i;
 
 function isValidClaimText(text: string): boolean {
@@ -160,6 +167,54 @@ function ensureUniqueClaimIds(claims: Claim[]): Claim[] {
   });
 }
 
+function sortCandidatesBySourceSpan(candidates: CandidateSentence[]): CandidateSentence[] {
+  return [...candidates].sort((a, b) => {
+    if (a.source_span.paragraphIndex === b.source_span.paragraphIndex) {
+      return a.source_span.sentenceIndex - b.source_span.sentenceIndex;
+    }
+    return a.source_span.paragraphIndex - b.source_span.paragraphIndex;
+  });
+}
+
+async function filterReviewCandidates(
+  candidates: CandidateSentence[],
+  context?: string
+): Promise<CandidateSentence[]> {
+  if (!candidates.length) return [];
+  const prompt = [
+    {
+      role: 'system' as const,
+      content:
+        '你是事实核查助手。仅输出 JSON {"decisions":[{"id":number,"keep":true|false}]}。keep 表示该句是否为可核验的客观陈述，判定标准：具备明确主体、谓词、宾语或可外部查证的量化信息。比喻、宣传口号、观点陈述一律 keep=false。禁止添加多余文本。'
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify({
+        context: context ?? null,
+        sentences: candidates.map((item, idx) => ({
+          id: idx + 1,
+          text: item.text,
+          score: item.score,
+          signals: item.signals
+        }))
+      })
+    }
+  ];
+  const fallback: ReviewFilterResponse = {
+    decisions: candidates.map((_, idx) => ({ id: idx + 1, keep: true }))
+  };
+  const response = await callQwenJSON<ReviewFilterResponse>(prompt, fallback, { maxRetries: 1 });
+  const decisions = Array.isArray(response.decisions) ? response.decisions : [];
+  if (!decisions.length) {
+    return candidates;
+  }
+  const keepIds = new Set(decisions.filter((decision) => decision.keep).map((decision) => decision.id));
+  if (!keepIds.size) {
+    return [];
+  }
+  return candidates.filter((_, idx) => keepIds.has(idx + 1));
+}
+
 async function runDeepseekForCandidates(params: {
   mode: 'allow' | 'review';
   candidates: CandidateSentence[];
@@ -236,22 +291,26 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    const allowFallback = allowCandidates.map((candidate) =>
+    const sortedAllow = sortCandidatesBySourceSpan(allowCandidates);
+    const sortedReview = sortCandidatesBySourceSpan(reviewCandidates);
+    const filteredReview = await filterReviewCandidates(sortedReview, context ?? undefined);
+
+    const allowFallback = sortedAllow.map((candidate) =>
       buildHeuristicClaim(candidate.text, candidate.source_span, candidate.score)
     );
-    const reviewFallback = reviewCandidates.map((candidate) =>
+    const reviewFallback = filteredReview.map((candidate) =>
       buildHeuristicClaim(candidate.text, candidate.source_span, 2)
     );
 
     const allowClaims = await runDeepseekForCandidates({
       mode: 'allow',
-      candidates: allowCandidates,
+      candidates: sortedAllow,
       context: context ?? undefined,
       fallback: allowFallback
     });
     const reviewClaims = await runDeepseekForCandidates({
       mode: 'review',
-      candidates: reviewCandidates,
+      candidates: filteredReview,
       context: context ?? undefined,
       fallback: reviewFallback
     });

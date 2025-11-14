@@ -288,6 +288,7 @@ export default function HomeClient() {
         body: JSON.stringify({
           claims,
           verifications: Object.values(verificationMap),
+          evidenceMap,
           generatedAt: new Date().toISOString()
         })
       });
@@ -310,7 +311,7 @@ export default function HomeClient() {
     } finally {
       setExporting(false);
     }
-  }, [claims, verificationMap, t]);
+  }, [claims, verificationMap, evidenceMap, t]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
