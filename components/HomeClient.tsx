@@ -402,51 +402,48 @@ export default function HomeClient() {
   }, [claims, verificationMap, evidenceMap, t]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent">{t('app.badge')}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            {quota ? (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
-                {quotaLoading
-                  ? t('auth.loading')
-                  : t('auth.remaining', { remaining: quota.remaining, limit: quota.limit })}
-              </span>
-            ) : null}
-            {session?.user?.email ? (
-              <button
-                type="button"
-                onClick={() => signOut()}
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300"
-              >
-                {t('auth.signOut')}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => signIn('google')}
-                disabled={status === 'loading'}
-                className="rounded-full border border-accent bg-blue-50 px-3 py-1 text-xs text-accent transition disabled:opacity-70"
-              >
-                {status === 'loading' ? t('auth.loading') : t('auth.signIn')}
-              </button>
-            )}
-            <LanguageSwitcher />
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-10">
+      <header className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white/90 via-white/70 to-blue-50/70 p-8 shadow-[0_20px_70px_-35px_rgba(46,115,255,0.6)] dark:border-slate-800 dark:from-slate-900/90 dark:via-slate-900/70 dark:to-slate-800/60">
+        <div className="pointer-events-none absolute inset-0 opacity-60 [background:radial-gradient(circle_at_20%_20%,rgba(124,58,237,0.12),transparent_40%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.18),transparent_38%),radial-gradient(circle_at_50%_80%,rgba(16,185,129,0.12),transparent_40%)]" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3 md:max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent shadow-sm backdrop-blur dark:border-accent/40 dark:bg-slate-900/60">
+              AI Evidence Workspace · 新一代
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 lg:text-4xl">
+              {t('home.title')}
+            </h1>
+            <p className="text-base text-slate-600 dark:text-slate-300">
+              {t('home.subtitle')}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a href="#upload" className="btn-primary">开始核查</a>
+              <a href="#features" className="btn-outline">查看流程</a>
+            </div>
+          </div>
+          <div className="grid w-full max-w-sm grid-cols-2 gap-3 md:max-w-xs">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-800/70">
+              <p className="text-xs text-slate-500 dark:text-slate-400">实时核查</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">AI+Web</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">搜索 + 模型双核</p>
+            </div>
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-800/70">
+              <p className="text-xs text-slate-500 dark:text-slate-400">免费额度</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
+                {quota && session?.user?.email ? `${quota.remaining} / ${quota.limit}` : '登录后可见'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">额度用完自动提示</p>
+            </div>
           </div>
         </div>
-        {session?.user?.email ? (
-          <p className="text-xs text-slate-500">
-            {session.user.name ?? session.user.email}
-          </p>
-        ) : null}
-        <h1 className="text-3xl font-bold text-slate-900">{t('home.title')}</h1>
-        <p className="text-sm text-slate-500">{t('home.subtitle')}</p>
       </header>
 
       <UsageSteps />
 
-      <UploadArea loading={uploading} onSubmit={handleUpload} onStop={handleStop} />
+      <div id="upload">
+        <UploadArea loading={uploading} onSubmit={handleUpload} onStop={handleStop} />
+      </div>
+
 
       {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
 
@@ -461,26 +458,32 @@ export default function HomeClient() {
         lastDuration={lastDuration}
       />
 
-      <Filters selected={filters} onToggle={toggleFilter} onClear={clearFilters} stats={stats} />
+      <div className="card p-4">
+        <Filters selected={filters} onToggle={toggleFilter} onClear={clearFilters} />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-[2fr,1fr]">
-        <DocPreview
-          document={parsedDoc}
-          claims={claims}
-          verifications={verificationMap}
-          selectedClaimId={selectedClaimId}
-          onSelectClaim={handleSelectClaim}
-        />
-        <div className="space-y-4">
-          <ClaimsList
+        <div className="card p-4">
+          <DocPreview
+            document={parsedDoc}
             claims={claims}
             verifications={verificationMap}
-            evidences={evidenceMap}
-            filters={filters}
-            loading={claimsLoading}
-            onSelectClaim={handleSelectClaim}
             selectedClaimId={selectedClaimId}
+            onSelectClaim={handleSelectClaim}
           />
+        </div>
+        <div className="space-y-4">
+          <div className="card p-4">
+            <ClaimsList
+              claims={claims}
+              verifications={verificationMap}
+              evidences={evidenceMap}
+              filters={filters}
+              loading={claimsLoading}
+              onSelectClaim={handleSelectClaim}
+              selectedClaimId={selectedClaimId}
+            />
+          </div>
         </div>
       </div>
 

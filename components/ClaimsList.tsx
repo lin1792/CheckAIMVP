@@ -37,7 +37,10 @@ export default function ClaimsList({
     return (
       <div className="space-y-3">
         {Array.from({ length: 5 }).map((_, idx) => (
-          <div key={`skeleton-${idx}`} className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+          <div
+            key={`skeleton-${idx}`}
+            className="h-16 animate-pulse rounded-2xl bg-gradient-to-r from-slate-100 via-white to-slate-100 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800"
+          />
         ))}
       </div>
     );
@@ -71,7 +74,7 @@ export default function ClaimsList({
             type="button"
             onClick={() => onSelectClaim(claim.id)}
             className={clsx(
-              'w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-accent',
+              'w-full rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent hover:shadow-lg hover:shadow-accent/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70',
               selectedClaimId === claim.id && 'border-accent ring-2 ring-accent/30'
             )}
           >

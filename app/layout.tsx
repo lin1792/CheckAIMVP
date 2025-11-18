@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import Script from 'next/script';
 import AppProviders from '@/components/AppProviders';
+import SiteHeader from '@/components/SiteHeader';
+import SiteFooter from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'ProofKit · 证据工作台',
@@ -26,7 +29,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body>
-        <AppProviders>{children}</AppProviders>
+        <Script
+          id="scroll-restoration"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `try { if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; } } catch (e) {}`
+          }}
+        />
+        <AppProviders>
+          <SiteHeader />
+          <div className="pt-16 md:pt-20">
+            {children}
+            <SiteFooter />
+          </div>
+        </AppProviders>
         <Analytics />
         <SpeedInsights />
       </body>

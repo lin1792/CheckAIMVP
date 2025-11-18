@@ -9,11 +9,10 @@ type Props = {
   selected: Verification['label'][];
   onToggle: (label: Verification['label']) => void;
   onClear: () => void;
-  stats: Record<Verification['label'], number>;
 };
 
 const order: Verification['label'][] = ['SUPPORTED', 'REFUTED', 'DISPUTED', 'INSUFFICIENT'];
-export default function Filters({ selected, onToggle, onClear, stats }: Props) {
+export default function Filters({ selected, onToggle, onClear }: Props) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -21,10 +20,10 @@ export default function Filters({ selected, onToggle, onClear, stats }: Props) {
         type="button"
         onClick={onClear}
         className={clsx(
-          'rounded-full border px-3 py-1 text-xs font-medium',
+          'rounded-full border px-3 py-1 text-xs font-medium backdrop-blur',
           selected.length === 0
-            ? 'border-accent bg-accent/10 text-accent'
-            : 'border-slate-200 text-slate-500 hover:border-accent'
+            ? 'border-accent bg-gradient-to-r from-accent/15 to-accent2/10 text-accent'
+            : 'border-slate-200 text-slate-500 hover:border-accent dark:border-slate-700 dark:text-slate-300'
         )}
       >
         {t('filters.all')}
@@ -35,13 +34,13 @@ export default function Filters({ selected, onToggle, onClear, stats }: Props) {
           type="button"
           onClick={() => onToggle(label)}
           className={clsx(
-            'rounded-full border px-3 py-1 text-xs font-medium transition',
+            'rounded-full border px-3 py-1 text-xs font-medium transition backdrop-blur',
             selected.includes(label)
-              ? 'border-accent bg-accent/10 text-accent'
-              : 'border-slate-200 text-slate-500 hover:border-accent'
+              ? 'border-accent bg-gradient-to-r from-accent/15 to-accent2/10 text-accent'
+              : 'border-slate-200 text-slate-500 hover:border-accent dark:border-slate-700 dark:text-slate-300'
           )}
         >
-          {t(`labels.${label}` as TranslationKey)} · {stats[label] ?? 0}
+          {t(`labels.${label}` as TranslationKey)}
         </button>
       ))}
     </div>

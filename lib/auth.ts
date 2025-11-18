@@ -4,12 +4,17 @@ import GoogleProvider from 'next-auth/providers/google';
 
 const clientId = process.env.GOOGLE_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const oidcTimeoutMs = Number(process.env.OIDC_HTTP_TIMEOUT_MS ?? '15000');
 
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: clientId ?? '',
-      clientSecret: clientSecret ?? ''
+      clientSecret: clientSecret ?? '',
+      // Increase openid-client HTTP timeout to better tolerate slow networks
+      httpOptions: {
+        timeout: oidcTimeoutMs
+      }
     })
   ],
   session: {

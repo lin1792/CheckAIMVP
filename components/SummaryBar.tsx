@@ -36,10 +36,15 @@ export default function SummaryBar({
     { key: 'summary.insufficient', value: stats.INSUFFICIENT ?? 0 }
   ];
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-gradient-to-r from-white/90 via-white/80 to-blue-50/70 p-5 shadow-lg shadow-blue-100/60 backdrop-blur dark:border-slate-700 dark:from-slate-900/90 dark:via-slate-900/80 dark:to-slate-800/70">
+      <div className="flex flex-wrap gap-3 text-sm text-slate-700 dark:text-slate-200">
         {summaryItems.map((item) => (
-          <span key={item.key}>{t(item.key, { count: item.value })}</span>
+          <span
+            key={item.key}
+            className="flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium shadow-sm backdrop-blur dark:bg-slate-800/80"
+          >
+            <Dot /> {t(item.key, { count: item.value })}
+          </span>
         ))}
       </div>
       <div className="text-right">
@@ -47,22 +52,26 @@ export default function SummaryBar({
           type="button"
           disabled={!readyToExport || exporting}
           onClick={onExport}
-          className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-gradient-to-r from-accent to-accent2 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-accent/30 transition hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
         >
           {exporting ? t('summary.exporting') : t('summary.export')}
         </button>
         {inProgress ? (
-          <p className="mt-1 text-xs text-slate-500 leading-snug">
+          <p className="mt-1 text-xs text-slate-500 leading-snug dark:text-slate-300">
             {t('summary.timer', { seconds: elapsedSeconds })}
             <br />
             {t('summary.reminder')}
           </p>
         ) : lastDuration > 0 ? (
-          <p className="mt-1 text-xs text-slate-500 leading-snug">
+          <p className="mt-1 text-xs text-slate-500 leading-snug dark:text-slate-300">
             {t('summary.completedTimer', { seconds: lastDuration })}
           </p>
         ) : null}
       </div>
     </div>
   );
+}
+
+function Dot() {
+  return <span className="h-2 w-2 rounded-full bg-gradient-to-r from-accent to-accent2" />;
 }

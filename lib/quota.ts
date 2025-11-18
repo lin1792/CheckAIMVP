@@ -4,11 +4,22 @@ const FALLBACK_QUOTA = 2;
 const PREFIX = 'usage:v1:';
 const memoryUsage = new Map<string, number>();
 
-const hasKv =
-  typeof process.env.KV_REST_API_URL === 'string' &&
-  process.env.KV_REST_API_URL.length > 0 &&
-  typeof process.env.KV_REST_API_TOKEN === 'string' &&
-  process.env.KV_REST_API_TOKEN.length > 0;
+// Stricter env validation to avoid runtime 500s when variables are swapped/malformed
+const kvUrl = process.env.KV_REST_API_URL ?? '';
+const kvToken = process.env.KV_REST_API_TOKEN ?? '';
+const kvUrlLooksValid = typeof kvUrl === 'string' && kvUrl.startsWith('https://');
+const kvTokenLooksValid = typeof kvToken === 'string' && kvToken.length > 20 && !kvToken.startsWith('http');
+const kvLooksSwapped = !kvUrlLooksValid && kvToken.startsWith('https://');
+
+if (kvLooksSwapped) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[kv] Detected likely swapped env: KV_REST_API_URL looks like a token or KV_REST_API_TOKEN looks like a URL.\n' +
+      'Please set KV_REST_API_URL to the Upstash REST URL (https://...) and KV_REST_API_TOKEN to the Read/Write token.'
+  );
+}
+
+const hasKv = kvUrlLooksValid && kvTokenLooksValid;
 
 const FREE_LIMIT = Number.isFinite(Number(process.env.FREE_QUOTA_LIMIT))
   ? Number(process.env.FREE_QUOTA_LIMIT)

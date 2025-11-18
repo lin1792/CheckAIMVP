@@ -11,15 +11,20 @@ const steps = [
 export default function UsageSteps() {
   const { t } = useTranslation();
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-base font-semibold text-slate-800">{t('home.stepsTitle')}</h2>
-      <p className="mt-1 text-sm text-slate-500">{t('home.stepsSubtitle')}</p>
+    <section className="card p-4">
+      <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{t('home.stepsTitle')}</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('home.stepsSubtitle')}</p>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         {steps.map((step) => (
-          <div key={step.titleKey} className="rounded-xl border border-slate-100 p-3">
+          <div
+            key={step.titleKey}
+            className="rounded-xl border border-slate-100 bg-white/70 p-3 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/70"
+          >
             <div className="text-2xl">{step.emoji}</div>
-            <p className="mt-2 text-sm font-semibold text-slate-800">{t(step.titleKey as any)}</p>
-            <p className="mt-1 text-xs text-slate-500">{t(step.descKey as any)}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {t(step.titleKey as any)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(step.descKey as any)}</p>
           </div>
         ))}
       </div>
