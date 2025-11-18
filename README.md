@@ -8,6 +8,8 @@ ProofKit（Next.js + TypeScript + Tailwind）是一套面向内容团队的 AI �
 - Serper 联网检索：`/api/search` 使用 Serper (Google Search API) 获取权威网页，再经本地归一化。
 - 事实核验：`/api/verify` 直接调用 Qwen Plus NLI 代理，`lib/scoring.ts` 融合权重得到标签+置信度。
 - UI：左侧原文同步高亮，右侧陈述列表 + 过滤 + 证据抽屉；顶部 SummaryBar 显示耗时提醒并支持导出。
+- 账户体系：Google 登录（NextAuth）后计入免费额度，每个新用户默认 2 次；额度存储在 Vercel KV，后续可扩展计费。
+- 观测性：接入 Vercel Analytics & Speed Insights，便于在 Vercel 上查看使用与性能。
 - 报告导出：`/api/report` 生成含引用列表的 HTML，前端打包为 `.doc` 方便在 Word 中编辑。
 - 健壮性：所有 API 输入/输出均由 Zod 校验；Qwen JSON 失败自动重试并有 fallback 模板。
 - 测试：`tests/parsing.test.ts`、`tests/scoring.test.ts` 覆盖解析与打分逻辑。
@@ -32,6 +34,10 @@ tests/        // Vitest 单元测试
 | `SERPER_LOCATION` | Serper 搜索地区 (gl) | 默认 `us` |
 | `SERPER_LANGUAGE` | Serper 搜索语言 (hl) | 默认 `en` |
 | `SUPPORT_THRESHOLD` `REFUTE_THRESHOLD` `COVERAGE_DIVISOR` `CONFIDENCE_BASE_WEIGHT` | 置信度/融合参数 | 可按需要在 `.env` 调整 |
+| `GOOGLE_CLIENT_ID` `GOOGLE_CLIENT_SECRET` | Google OAuth 应用 | [Google Cloud 控制台](https://console.cloud.google.com/apis/credentials) 新建 OAuth 客户端 |
+| `NEXTAUTH_SECRET` | NextAuth 加密密钥 | 本地可用 `openssl rand -base64 32` 生成 |
+| `KV_REST_API_URL` `KV_REST_API_TOKEN` `KV_REST_API_READ_ONLY_TOKEN` | Vercel KV 存储额度 | Vercel Dashboard -> Storage -> KV |
+| `FREE_QUOTA_LIMIT` | 每个用户的免费次数 | 选填，默认 2 |
 
 ## 本地开发
 ```bash

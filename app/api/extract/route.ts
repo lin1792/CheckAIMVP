@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDocxBuffer, parsePlainText } from '@/lib/parsing';
 import { ExtractResponseSchema } from '@/lib/schemas';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
     const contentType = req.headers.get('content-type') ?? '';
     let parsed;
     if (contentType.includes('multipart/form-data')) {

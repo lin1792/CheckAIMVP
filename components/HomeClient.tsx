@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import UploadArea, { type UploadPayload } from './UploadArea';
 import DocPreview from './DocPreview';
 import ClaimsList from './ClaimsList';
@@ -28,6 +29,12 @@ const emptyStats = {
   INSUFFICIENT: 0
 };
 
+type QuotaState = {
+  remaining: number;
+  used: number;
+  limit: number;
+};
+
 export default function HomeClient() {
   const [parsedDoc, setParsedDoc] = useState<ParsedDocument | null>(null);
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -45,9 +52,35 @@ export default function HomeClient() {
   const [verificationStart, setVerificationStart] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [lastDuration, setLastDuration] = useState(0);
+  const { data: session, status } = useSession();
+  const [quota, setQuota] = useState<QuotaState | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
   const { t } = useTranslation();
 
   const isAbortError = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
+
+  const refreshQuota = useCallback(async () => {
+    if (status !== 'authenticated') return;
+    setQuotaLoading(true);
+    try {
+      const res = await fetch('/api/quota');
+      if (!res.ok) throw new Error('quota fetch failed');
+      const data: QuotaState = await res.json();
+      setQuota(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setQuotaLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      refreshQuota();
+    } else {
+      setQuota(null);
+    }
+  }, [status, refreshQuota]);
 
   const fetchWithAbort = useCallback(async (input: RequestInfo, init?: RequestInit) => {
     const controller = new AbortController();
@@ -96,6 +129,14 @@ export default function HomeClient() {
           context: contextPayload
         })
       });
+      if (searchRes.status === 401) {
+        setError(t('auth.loginRequired'));
+        return;
+      }
+      if (searchRes.status === 403) {
+        setError(t('auth.noQuota'));
+        return;
+      }
       if (!searchRes.ok) throw new Error('search failed');
       const evidences: EvidenceCandidate[] = await searchRes.json();
       if (stopRequestedRef.current) return;
@@ -110,6 +151,14 @@ export default function HomeClient() {
           context: contextPayload
         })
       });
+      if (verifyRes.status === 401) {
+        setError(t('auth.loginRequired'));
+        return;
+      }
+      if (verifyRes.status === 403) {
+        setError(t('auth.noQuota'));
+        return;
+      }
       if (!verifyRes.ok) throw new Error('verify failed');
       const data: Verification[] = await verifyRes.json();
       if (stopRequestedRef.current) return;
@@ -147,6 +196,17 @@ export default function HomeClient() {
             context: parsed.paragraphs.join('\n')
           })
         });
+        if (res.status === 401) {
+          setError(t('auth.loginRequired'));
+          setVerificationStart(null);
+          return;
+        }
+        if (res.status === 403) {
+          await refreshQuota();
+          setError(t('auth.noQuota'));
+          setVerificationStart(null);
+          return;
+        }
         if (!res.ok) throw new Error('claim request failed');
         const data: Claim[] = await res.json();
         if (stopRequestedRef.current) return;
@@ -179,7 +239,7 @@ export default function HomeClient() {
         setClaimsLoading(false);
       }
     },
-    [processClaim, t, fetchWithAbort]
+    [processClaim, t, fetchWithAbort, refreshQuota]
   );
 
   const handleUpload = useCallback(
@@ -187,7 +247,31 @@ export default function HomeClient() {
       setUploading(true);
       setError(null);
       try {
+        if (status !== 'authenticated') {
+          setError(t('auth.loginRequired'));
+          return;
+        }
+
         stopRequestedRef.current = false;
+        const quotaRes = await fetch('/api/quota', { method: 'POST' });
+        if (quotaRes.status === 401) {
+          setError(t('auth.loginRequired'));
+          return;
+        }
+        if (quotaRes.status === 403) {
+          const latest = (await quotaRes.json().catch(() => null)) as QuotaState | null;
+          if (latest) {
+            setQuota(latest);
+          }
+          setError(t('auth.noQuota'));
+          return;
+        }
+        if (!quotaRes.ok) {
+          throw new Error('quota reservation failed');
+        }
+        const quotaSnapshot = (await quotaRes.json()) as QuotaState;
+        setQuota(quotaSnapshot);
+
         let response: Response;
         if (payload.file) {
           const formData = new FormData();
@@ -207,6 +291,10 @@ export default function HomeClient() {
           });
         }
 
+        if (response.status === 401) {
+          setError(t('auth.loginRequired'));
+          return;
+        }
         if (!response.ok) {
           throw new Error(t('errors.parseFailed'));
         }
@@ -226,7 +314,7 @@ export default function HomeClient() {
         setUploading(false);
       }
     },
-    [fetchClaims, t, fetchWithAbort]
+    [fetchClaims, t, fetchWithAbort, status]
   );
 
   useEffect(() => {
@@ -318,8 +406,40 @@ export default function HomeClient() {
       <header className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-accent">{t('app.badge')}</p>
-          <LanguageSwitcher />
+          <div className="flex flex-wrap items-center gap-2">
+            {quota ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                {quotaLoading
+                  ? t('auth.loading')
+                  : t('auth.remaining', { remaining: quota.remaining, limit: quota.limit })}
+              </span>
+            ) : null}
+            {session?.user?.email ? (
+              <button
+                type="button"
+                onClick={() => signOut()}
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300"
+              >
+                {t('auth.signOut')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => signIn('google')}
+                disabled={status === 'loading'}
+                className="rounded-full border border-accent bg-blue-50 px-3 py-1 text-xs text-accent transition disabled:opacity-70"
+              >
+                {status === 'loading' ? t('auth.loading') : t('auth.signIn')}
+              </button>
+            )}
+            <LanguageSwitcher />
+          </div>
         </div>
+        {session?.user?.email ? (
+          <p className="text-xs text-slate-500">
+            {session.user.name ?? session.user.email}
+          </p>
+        ) : null}
         <h1 className="text-3xl font-bold text-slate-900">{t('home.title')}</h1>
         <p className="text-sm text-slate-500">{t('home.subtitle')}</p>
       </header>

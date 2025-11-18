@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { webSearch } from '@/lib/webSearch';
 import { buildNormalizedFacets } from '@/lib/claimContext';
 import { SearchRequestSchema, SearchResponseSchema } from '@/lib/schemas';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 const MAX_CONTEXT_LENGTH = 6000;
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
     const json = await req.json();
     const payload = SearchRequestSchema.parse(json);
     const contextSnippet = payload.context?.slice(0, MAX_CONTEXT_LENGTH);

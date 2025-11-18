@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { LanguageProvider } from '@/components/LanguageProvider';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import AppProviders from '@/components/AppProviders';
 
 export const metadata: Metadata = {
   title: 'ProofKit · 证据工作台',
@@ -24,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body>
-        <LanguageProvider>{children}</LanguageProvider>
+        <AppProviders>{children}</AppProviders>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

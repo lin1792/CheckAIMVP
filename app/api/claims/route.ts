@@ -6,6 +6,8 @@ import {
   ClaimsResponseSchema,
   type Claim
 } from '@/lib/schemas';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { consumeQuota } from '@/lib/quota';
 import { buildHeuristicClaim, evaluateSentence } from '@/lib/claimHeuristics';
 import { generateFallbackQueries, sanitizeQueries } from '@/lib/searchQueries';
 
@@ -264,6 +266,15 @@ export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
     const payload = ClaimsRequestSchema.parse(json);
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
+    const quota = await consumeQuota(user.id);
+    if (!quota.allowed) {
+      return NextResponse.json({ error: '免费额度已用完', ...quota }, { status: 403 });
+    }
     const pairs = payload.sentences.map((text, idx) => ({
       text,
       source_span: payload.mapping[idx] ?? { paragraphIndex: 0, sentenceIndex: idx }
