@@ -9,8 +9,7 @@ export default function ThemeToggle() {
   useEffect(() => {
     setMounted(true);
     const saved = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialDark = saved ? saved === 'dark' : prefersDark;
+    const initialDark = saved ? saved === 'dark' : false; // 默认亮色
     setDark(initialDark);
     document.documentElement.classList.toggle('dark', initialDark);
   }, []);
@@ -52,4 +51,3 @@ function MoonIcon() {
     </svg>
   );
 }
-
