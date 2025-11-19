@@ -34,79 +34,81 @@ export default function EvidenceDrawer({ open, claim, evidences, verification, o
   return (
     <div
       className={clsx(
-        'fixed inset-y-0 right-0 z-40 w-full max-w-md transform bg-white shadow-2xl transition-transform',
+        'fixed right-0 top-16 md:top-20 bottom-0 z-40 w-full max-w-md transform bg-white shadow-2xl transition-transform',
         open ? 'translate-x-0' : 'translate-x-full'
       )}
     >
-      <div className="flex items-center justify-between border-b border-slate-100 p-4">
-        <div className="pr-4">
-          <p className="text-xs uppercase text-slate-400">{t('drawer.title')}</p>
-          <p className="text-sm font-semibold text-slate-800">
-            {claim ? claim.text.slice(0, 80) : t('drawer.noClaim')}
-          </p>
+      <div className="flex h-full flex-col">
+        <div className="flex items-center justify-between border-b border-slate-100 p-4">
+          <div className="pr-4">
+            <p className="text-xs uppercase text-slate-400">{t('drawer.title')}</p>
+            <p className="text-sm font-semibold text-slate-800">
+              {claim ? claim.text.slice(0, 80) : t('drawer.noClaim')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm whitespace-nowrap text-slate-500"
+          >
+            {t('drawer.close')}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm text-slate-500 whitespace-nowrap"
-        >
-          {t('drawer.close')}
-        </button>
-      </div>
-      <div ref={scrollRef} className="h-[calc(100%-64px)] overflow-y-auto p-4 space-y-4">
-        {verification ? (
-          <section className="rounded-xl bg-slate-50 p-3 text-sm shadow-sm">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t('drawer.verdict')}
-            </h3>
-            <p className={clsx('mt-1 text-base font-bold', labelColor[verification.label])}>
-              {t(`labels.${verification.label}` as TranslationKey)}
-            </p>
-            <p className="text-xs text-slate-500">
-              {t('drawer.confidence', { value: Math.round(verification.confidence * 100) })}
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-slate-700">
-              {renderReason(verification.reason, evidences, verification.citations)}
-            </p>
-          </section>
-        ) : null}
-        {evidences.length === 0 ? (
-          <p className="text-sm text-slate-500">{t('drawer.noEvidence')}</p>
-        ) : (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-              {t('claims.evidenceCount', { count: evidences.length })}
-            </h3>
-            <ul className="space-y-3">
-              {evidences.map((evidence, index) => (
-                <li
-                  key={evidence.id}
-                  className="rounded-xl border border-slate-200 p-3 text-sm bg-white shadow-sm"
-                >
-                  <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-                    <p>{t(`sources.${evidence.source}` as TranslationKey)}</p>
-                    <span className="text-slate-500">#{index + 1}</span>
-                  </div>
-                  <a
-                    href={evidence.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 block font-semibold text-accent hover:underline"
+        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+          {verification ? (
+            <section className="rounded-xl bg-slate-50 p-3 text-sm shadow-sm">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('drawer.verdict')}
+              </h3>
+              <p className={clsx('mt-1 text-base font-bold', labelColor[verification.label])}>
+                {t(`labels.${verification.label}` as TranslationKey)}
+              </p>
+              <p className="text-xs text-slate-500">
+                {t('drawer.confidence', { value: Math.round(verification.confidence * 100) })}
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-700">
+                {renderReason(verification.reason, evidences, verification.citations)}
+              </p>
+            </section>
+          ) : null}
+          {evidences.length === 0 ? (
+            <p className="text-sm text-slate-500">{t('drawer.noEvidence')}</p>
+          ) : (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('claims.evidenceCount', { count: evidences.length })}
+              </h3>
+              <ul className="space-y-3">
+                {evidences.map((evidence, index) => (
+                  <li
+                    key={evidence.id}
+                    className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm"
                   >
-                    {evidence.title}
-                  </a>
-                  <p className="mt-1 text-slate-600 leading-relaxed">
-                    {truncateQuote(evidence.quote)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {t('drawer.authority', { value: (evidence.authority * 100).toFixed(0) })}
-                    {evidence.published_at ? ` · ${new Date(evidence.published_at).toLocaleDateString()}` : ''}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+                    <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                      <p>{t(`sources.${evidence.source}` as TranslationKey)}</p>
+                      <span className="text-slate-500">#{index + 1}</span>
+                    </div>
+                    <a
+                      href={evidence.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block font-semibold text-accent hover:underline"
+                    >
+                      {evidence.title}
+                    </a>
+                    <p className="mt-1 leading-relaxed text-slate-600">
+                      {truncateQuote(evidence.quote)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {t('drawer.authority', { value: (evidence.authority * 100).toFixed(0) })}
+                      {evidence.published_at ? ` · ${new Date(evidence.published_at).toLocaleDateString()}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

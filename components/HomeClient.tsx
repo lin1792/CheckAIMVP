@@ -186,6 +186,16 @@ export default function HomeClient() {
       setVerificationStart(Date.now());
       setElapsedSeconds(0);
       setLastDuration(0);
+      // Optimistically reflect quota deduction as soon as verification starts
+      setQuota((prev) =>
+        prev
+          ? {
+              ...prev,
+              used: Math.min(prev.used + 1, prev.limit),
+              remaining: Math.max(prev.remaining - 1, 0)
+            }
+          : prev
+      );
       try {
         const res = await fetchWithAbort('/api/claims', {
           method: 'POST',
@@ -211,6 +221,7 @@ export default function HomeClient() {
         const data: Claim[] = await res.json();
         if (stopRequestedRef.current) return;
         setClaims(data);
+        await refreshQuota();
         setClaimsLoading(false);
 
         const queue = [...data];
@@ -237,6 +248,7 @@ export default function HomeClient() {
         setElapsedSeconds(0);
       } finally {
         setClaimsLoading(false);
+        await refreshQuota();
       }
     },
     [processClaim, t, fetchWithAbort, refreshQuota]
@@ -253,24 +265,20 @@ export default function HomeClient() {
         }
 
         stopRequestedRef.current = false;
-        const quotaRes = await fetch('/api/quota', { method: 'POST' });
+        const quotaRes = await fetch('/api/quota');
         if (quotaRes.status === 401) {
           setError(t('auth.loginRequired'));
           return;
         }
-        if (quotaRes.status === 403) {
-          const latest = (await quotaRes.json().catch(() => null)) as QuotaState | null;
-          if (latest) {
-            setQuota(latest);
-          }
-          setError(t('auth.noQuota'));
-          return;
-        }
         if (!quotaRes.ok) {
-          throw new Error('quota reservation failed');
+          throw new Error('quota fetch failed');
         }
         const quotaSnapshot = (await quotaRes.json()) as QuotaState;
         setQuota(quotaSnapshot);
+        if (quotaSnapshot.remaining <= 0) {
+          setError(t('auth.noQuota'));
+          return;
+        }
 
         let response: Response;
         if (payload.file) {
@@ -302,6 +310,7 @@ export default function HomeClient() {
         if (stopRequestedRef.current) return;
         setParsedDoc(parsed);
         await fetchClaims(parsed);
+        await refreshQuota();
       } catch (err) {
         if (stopRequestedRef.current || isAbortError(err)) {
           return;
@@ -314,7 +323,7 @@ export default function HomeClient() {
         setUploading(false);
       }
     },
-    [fetchClaims, t, fetchWithAbort, status]
+    [fetchClaims, t, fetchWithAbort, status, refreshQuota]
   );
 
   useEffect(() => {
